@@ -1,0 +1,160 @@
+---
+title: "Comparing panel estimators with cfcompare"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Comparing panel estimators with cfcompare}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = requireNamespace("ggplot2", quietly = TRUE)
+)
+```
+
+## The problem
+
+You have a binary-treatment panel and several plausible estimators: classic
+difference-in-differences (DID), synthetic difference-in-differences (SDID),
+synthetic control (SC), matrix completion (MC), and the Triply RObust Panel
+(TROP) estimator of Athey, Imbens, Qu & Viviano (2025). Each lives in its own
+package with its own data format, its own notion of a "treatment effect" and its
+own plot. Comparing them on the *same* dataset means re-shaping data five times
+and reconciling five different output objects by hand.
+
+`cfcompare` does that reconciliation for you. You pass one long-format data frame and
+a vector of method names; you get back one tidy table of ATTs and one plot.
+
+```{r setup}
+library(cfcompare)
+```
+
+## A simulated panel
+
+`sim_panel()` draws from a low-rank factor model
+`Y_it(0) = alpha_i + beta_t + L_it + eps_it` and adds a constant treatment effect
+to treated cells, so we know the ground truth.
+
+```{r sim}
+df <- sim_panel(N = 30, T = 16, n_treated = 5, t0 = 12, rank = 3,
+                att = 2, noise = 1, seed = 1)
+head(df)
+```
+
+The columns are the unit id (`id`), time (`t`), observed outcome (`y`), the 0/1
+treatment indicator (`w`), and the oracle untreated outcome (`y0`, for
+evaluation only). The true ATT here is `2`.
+
+## Comparing estimators
+
+```{r compare}
+cmp <- panel_compare(
+  df,
+  outcome = "y", treatment = "w", unit = "id", time = "t",
+  methods = c("DID", "MC", "TROP"),
+  se = "jackknife"
+)
+cmp
+```
+
+The `att` element is a `cf_att_tbl`: one row per method, all on the same
+schema.
+
+```{r att-table}
+cmp$att
+```
+
+Every estimate carries the number of treated cells and units, the estimated rank
+of the low-rank component `L` (for the native engines), and a `note` column that
+records anything that was skipped.
+
+## Plots
+
+`autoplot()` on the comparison gives a forest plot of the ATTs with their
+confidence intervals:
+
+```{r forest, fig.width = 6, fig.height = 3}
+autoplot(cmp)
+```
+
+`plot_counterfactual()` overlays the observed treated-average path against each
+estimator's predicted untreated path, so you can see *where* the methods
+disagree, not just by how much:
+
+```{r cf, fig.width = 6, fig.height = 3.5}
+plot_counterfactual(cmp)
+```
+
+## One estimator at a time
+
+`trop()` is the workhorse. Called on its own it cross-validates the three
+penalties — time-weight decay, unit-weight decay, and the nuclear-norm penalty
+on `L` — by leave-one-out on the control cells.
+
+```{r trop-fit}
+fit <- trop(df, "y", "w", "id", "t", se = "jackknife")
+fit
+```
+
+The fitted object exposes the per-cell effects, the estimated untreated-outcome
+matrix, and the selected penalties:
+
+```{r trop-internals}
+head(fit$tau_cells)
+fit$lambda
+```
+
+### Recovering special cases
+
+The TROP program nests DID and matrix completion. Fixing the penalties by hand
+matches them numerically, which is useful as a sanity check:
+
+```{r special}
+did <- trop(df, "y", "w", "id", "t",
+            lambda = list(time = 0, unit = 0, nn = Inf))
+mc  <- trop(df, "y", "w", "id", "t",
+            lambda = list(time = 0, unit = 0, nn = 5))
+c(DID = did$att, MC = mc$att, TROP = fit$att)
+```
+
+With `lambda_nn = Inf` and uniform weights the low-rank term vanishes and the fit
+is ordinary two-way fixed effects; with a finite `lambda_nn` and uniform weights
+it is matrix completion; letting cross-validation pick the unit and time weights
+gives the full TROP estimator.
+
+## Bringing your own results
+
+If you already ran an estimator elsewhere — say `synthdid` directly — coerce it
+onto the shared schema with `as_att()` and combine it with native fits:
+
+```{r byo, eval = FALSE}
+library(synthdid)
+sd <- synthdid_estimate(Y, N0, T0)
+
+combined <- as_att(list(
+  fit,
+  as_att(sd, method = "SDID", outcome = "y")
+))
+autoplot(combined)
+```
+
+## Designs and inference
+
+The native engines (DID, MC, TROP) accept **block**, **staggered**, and
+**non-absorbing** binary treatments: `treatment` is simply the 0/1 indicator of
+active treatment in each cell. `SDID` and `SC` are defined for block designs only
+and are skipped, with a note, on other designs.
+
+Standard errors from the native engines are **jackknife**
+(leave-one-treated-unit-out) when there are at least two treated units, and
+**placebo** when there is a single treated unit. These are practical
+approximations; see Section 6 of the paper for the estimator's formal inference
+theory.
+
+## Reference
+
+Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025). *Triply Robust Panel
+Estimators.* arXiv:2508.21536.

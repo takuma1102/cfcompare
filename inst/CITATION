@@ -1,0 +1,22 @@
+citHeader("cfcompare is an unofficial implementation. Please cite the TROP paper:")
+
+bibentry(
+  bibtype = "Article",
+  title   = "Triply Robust Panel Estimators",
+  author  = c(person("Susan", "Athey"), person("Guido W.", "Imbens"),
+              person("Zhaonan", "Qu"), person("Davide", "Viviano")),
+  journal = "Journal of Applied Econometrics",
+  year    = "2026",
+  pages   = "1--16",
+  doi     = "10.1002/jae.70061",
+  note    = "Working-paper version: arXiv:2508.21536"
+)
+
+bibentry(
+  bibtype  = "Manual",
+  title    = "cfcompare: Compare DID, SDID, Matrix Completion and the Triply Robust Panel Estimator",
+  author   = person("Takuma", "Iwasaki"),
+  year     = "2026",
+  note     = "Unofficial R package version 0.1.0; not affiliated with the TROP authors",
+  url      = "https://takuma1102.github.io/"
+)

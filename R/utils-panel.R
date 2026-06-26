@@ -1,0 +1,100 @@
+# Panel data utilities: validation and long <-> wide (N x T matrix) reshaping.
+
+#' Reshape a long panel into outcome/treatment matrices
+#'
+#' Converts a long `data.frame` into the `N x T` outcome (`Y`) and treatment
+#' (`W`) matrices used throughout the package, after validating that the panel
+#' is well formed.
+#'
+#' @param data A long `data.frame`/`tibble`.
+#' @param outcome,treatment,unit,time Column names (strings).
+#' @return A list with matrices `Y`, `W` (rows = units, columns = times), and
+#'   the sorted `units` and `times` labels.
+#' @keywords internal
+#' @noRd
+.panel_to_matrices <- function(data, outcome, treatment, unit, time) {
+  cols <- c(outcome, treatment, unit, time)
+  miss <- setdiff(cols, names(data))
+  if (length(miss)) {
+    stop("Columns not found in `data`: ", paste(miss, collapse = ", "),
+         call. = FALSE)
+  }
+  data <- as.data.frame(data)
+  u <- data[[unit]]
+  ti <- data[[time]]
+  units <- sort(unique(u))
+  times <- sort(unique(ti))
+  N <- length(units); Tt <- length(times)
+
+  if (anyDuplicated(data[c(unit, time)])) {
+    stop("`data` has duplicate unit-time rows.", call. = FALSE)
+  }
+
+  w_vals <- data[[treatment]]
+  if (!all(stats::na.omit(w_vals) %in% c(0, 1))) {
+    stop("`treatment` must be a 0/1 indicator.", call. = FALSE)
+  }
+
+  ri <- match(u, units)
+  ci <- match(ti, times)
+  Y <- matrix(NA_real_, N, Tt, dimnames = list(units, as.character(times)))
+  W <- matrix(0, N, Tt, dimnames = list(units, as.character(times)))
+  idx <- cbind(ri, ci)
+  Y[idx] <- as.numeric(data[[outcome]])
+  W[idx] <- as.numeric(w_vals)
+  W[is.na(W)] <- 0
+
+  if (all(W == 0)) stop("No treated cells found.", call. = FALSE)
+  if (all(W == 1)) stop("No control cells found.", call. = FALSE)
+
+  list(Y = Y, W = W, units = units, times = times)
+}
+
+#' Describe the assignment pattern of a treatment matrix
+#'
+#' Determines whether a treatment matrix follows a synthetic-control-style
+#' block design (a set of units treated from a common period onward, never
+#' reverting) or a general / staggered / non-absorbing pattern.
+#'
+#' @param W An `N x T` 0/1 treatment matrix.
+#' @return A list describing the design: `type` (`"block"` or `"general"`),
+#'   treated unit indices, first treated period, and counts.
+#' @keywords internal
+#' @noRd
+.assignment_pattern <- function(W) {
+  N <- nrow(W); Tt <- ncol(W)
+  treated_units <- which(rowSums(W) > 0)
+  ever_treated_periods <- which(colSums(W) > 0)
+  first_treat_period <- if (length(ever_treated_periods)) {
+    min(ever_treated_periods)
+  } else NA_integer_
+
+  is_block <- TRUE
+  t0 <- NA_integer_
+  if (length(treated_units)) {
+    # block: each treated unit is control before some t0 and treated from t0 on,
+    # with a common t0 across treated units.
+    starts <- vapply(treated_units, function(i) {
+      tr <- which(W[i, ] == 1)
+      st <- min(tr)
+      # absorbing from st onward?
+      if (!all(W[i, st:Tt] == 1)) return(NA_integer_)
+      if (st > 1 && any(W[i, 1:(st - 1)] == 1)) return(NA_integer_)
+      st
+    }, integer(1))
+    if (anyNA(starts) || length(unique(starts)) != 1L) {
+      is_block <- FALSE
+    } else {
+      t0 <- unique(starts)
+    }
+  }
+
+  list(
+    type = if (is_block) "block" else "general",
+    treated_units = treated_units,
+    n_treated_units = length(treated_units),
+    n_treated_cells = sum(W == 1),
+    first_treat_period = first_treat_period,
+    block_t0 = t0
+  )
+}
