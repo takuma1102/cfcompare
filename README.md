@@ -8,10 +8,10 @@
 > **Note**: `cfcompare` is an independent R package
 > and not endorsed or maintained by the authors of the TROP estimator (Athey, Imbens, Qu &
 > Viviano, 2026). TROP software written by the authors
-> includes the Python package
+> includes their Python package
 > [`trop`](https://pypi.org/project/trop/)
 > ([ostasovskyi/TROP-Estimator](https://github.com/ostasovskyi/TROP-Estimator))
-> and a Stata implementation
+> and Stata package
 > ([justinwaddy/TROP](https://github.com/justinwaddy/TROP)). Please cite the paper (see
 > [Citation](#citation)) when using this software.
 
@@ -312,5 +312,4 @@ cite the paper:
   version: [arXiv:2508.21536](https://arxiv.org/abs/2508.21536).
 
 and the underlying packages for any wrapped estimators (`synthdid`, `gsynth`,
-`augsynth`). The authors' official software is the Python package
-[`trop`](https://pypi.org/project/trop/).
+`augsynth`).
