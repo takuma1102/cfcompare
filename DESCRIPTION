@@ -28,6 +28,7 @@ Imports:
 Suggests:
     RSpectra,
     future.apply,
+    patchwork,
     synthdid,
     gsynth,
     augsynth,

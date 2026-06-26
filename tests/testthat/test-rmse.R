@@ -14,6 +14,8 @@ test_that("panel_rmse returns a ranked tidy table for native methods", {
 })
 
 test_that("panel_rmse skips wrapped methods gracefully when unavailable", {
+  skip_if(requireNamespace("synthdid", quietly = TRUE),
+          "synthdid is installed; skip-path not exercised")
   df <- sim_panel(N = 20, T = 12, n_treated = 3, t0 = 10, seed = 3)
   r <- panel_rmse(df, "y", "w", "id", "t",
                   methods = c("DID", "SDID"),

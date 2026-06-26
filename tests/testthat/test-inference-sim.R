@@ -22,5 +22,5 @@ test_that("sim_semisynthetic supports a dynamic effect path", {
   ss <- sim_semisynthetic(real, "y", "id", "t", n_treated = 4, t0 = 10,
                           effect = c(1, 2, 3), seed = 1)
   by_t <- tapply(ss$tau[ss$w == 1], ss$t[ss$w == 1], mean)
-  expect_equal(unname(by_t), c(1, 2, 3))
+  expect_equal(as.numeric(by_t), c(1, 2, 3))
 })
