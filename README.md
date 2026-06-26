@@ -5,7 +5,7 @@
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- badges: end -->
 
-> **Independent, unofficial package.** `cfcompare` is an independent R package
+> **Note** `cfcompare` is an independent R package
 > and not endorsed or maintained by the authors of the TROP estimator (Athey, Imbens, Qu &
 > Viviano, 2026). TROP software written by the authors
 > includes the Python package
@@ -28,8 +28,6 @@ packages. Existing official TROP software includes the Python package `trop` and
 a Stata implementation ([justinwaddy/TROP](https://github.com/justinwaddy/TROP));
 `cfcompare` is not affiliated with or
 endorsed by those authors or maintainers.
-
-![Estimation RMSE of the ATT across estimators under unobserved confounding](man/figures/readme-rmse.png)
 
 *Estimation RMSE of the ATT on a toy factor-model panel where treatment is
 selected on unobserved factor loadings. Two-way fixed effects (DID) is biased by
