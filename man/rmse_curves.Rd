@@ -29,7 +29,7 @@ as in the paper's two-panel figure.
 # defaults are a large simulation; use a small grid + few reps for a quick look
 g <- rmse_curves(values_control = c(30, 50), values_pre = c(8, 14),
                  n_runs = 2, methods = c("DID", "TROP"),
-                 control = trop_control(n_cv_cells = 30L, cv_cycles = 1L))
+                 control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
 plot(g)                  # two separate figures (default)
 plot(g, combined = TRUE) # side-by-side, paper-style
 }

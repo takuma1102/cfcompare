@@ -28,6 +28,6 @@ which periods the counterfactual leans on.
 \donttest{
 df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 3, seed = 1)
 autoplot(trop(df, "y", "w", "id", "t",
-              control = trop_control(n_cv_cells = 30L, cv_cycles = 1L)))
+              control = trop_control(n_cv_cells = 8L, cv_cycles = 1L)))
 }
 }

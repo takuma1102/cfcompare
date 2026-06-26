@@ -32,7 +32,7 @@
 #' df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
 #' g <- trop_sensitivity(df, "y", "w", "id", "t",
 #'                       lambda_time = c(0, 0.1, 0.5), lambda_nn = c(2, 5),
-#'                       control = trop_control(n_cv_cells = 30L, cv_cycles = 1L))
+#'                       control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
 #' autoplot(g)
 #' }
 trop_sensitivity <- function(data, outcome, treatment, unit, time,

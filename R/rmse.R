@@ -72,7 +72,7 @@
 #' r <- panel_rmse(df, "y", "w", "id", "t",
 #'                 methods = c("DID", "TROP"),
 #'                 horizon = 2, n_pseudo = 3, n_runs = 2,
-#'                 control = trop_control(n_cv_cells = 30L, cv_cycles = 1L),
+#'                 control = trop_control(n_cv_cells = 8L, cv_cycles = 1L),
 #'                 seed = 1)
 #' r
 #' autoplot(r)

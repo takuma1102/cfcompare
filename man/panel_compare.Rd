@@ -52,7 +52,8 @@ or that do not apply to the design, are skipped with a message.
 \examples{
 df <- sim_panel(N = 25, T = 14, n_treated = 4, t0 = 10, seed = 3)
 cmp <- panel_compare(df, "y", "w", "id", "t",
-                     methods = c("DID", "MC", "TROP"), se = "none")
+                     methods = c("DID", "MC", "TROP"), se = "none",
+                     control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
 cmp$att
 }
 \seealso{
