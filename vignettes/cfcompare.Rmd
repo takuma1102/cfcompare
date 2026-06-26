@@ -39,7 +39,7 @@ library(cfcompare)
 to treated cells, so we know the ground truth.
 
 ```{r sim}
-df <- sim_panel(N = 30, T = 16, n_treated = 5, t0 = 12, rank = 3,
+df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, rank = 3,
                 att = 2, noise = 1, seed = 1)
 head(df)
 ```
@@ -55,7 +55,8 @@ cmp <- panel_compare(
   df,
   outcome = "y", treatment = "w", unit = "id", time = "t",
   methods = c("DID", "MC", "TROP"),
-  se = "jackknife"
+  se = "jackknife",
+  control = trop_control(n_cv_cells = 30L, cv_cycles = 1L)
 )
 cmp
 ```
@@ -95,7 +96,8 @@ penalties — time-weight decay, unit-weight decay, and the nuclear-norm penalty
 on `L` — by leave-one-out on the control cells.
 
 ```{r trop-fit}
-fit <- trop(df, "y", "w", "id", "t", se = "jackknife")
+fit <- trop(df, "y", "w", "id", "t", se = "jackknife",
+            control = trop_control(n_cv_cells = 30L, cv_cycles = 1L))
 fit
 ```
 

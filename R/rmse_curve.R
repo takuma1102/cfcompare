@@ -100,7 +100,9 @@
 #' @examples
 #' \donttest{
 #' # quick look (small grid + few reps); raise n_runs/values for paper quality
-#' cc <- rmse_curve("n_control", values = seq(30, 90, by = 10), n_runs = 30)
+#' cc <- rmse_curve("n_control", values = c(30, 50), n_runs = 2,
+#'                  methods = c("DID", "TROP"),
+#'                  control = trop_control(n_cv_cells = 30L, cv_cycles = 1L))
 #' autoplot(cc)
 #' }
 rmse_curve <- function(vary = c("n_control", "n_pre"),
@@ -174,8 +176,9 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
 #' @examples
 #' \donttest{
 #' # defaults are a large simulation; use a small grid + few reps for a quick look
-#' g <- rmse_curves(values_control = seq(30, 90, by = 10),
-#'                  values_pre = seq(6, 30, by = 4), n_runs = 30)
+#' g <- rmse_curves(values_control = c(30, 50), values_pre = c(8, 14),
+#'                  n_runs = 2, methods = c("DID", "TROP"),
+#'                  control = trop_control(n_cv_cells = 30L, cv_cycles = 1L))
 #' plot(g)                  # two separate figures (default)
 #' plot(g, combined = TRUE) # side-by-side, paper-style
 #' }

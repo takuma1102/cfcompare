@@ -68,11 +68,11 @@
 #' @export
 #' @examples
 #' \donttest{
-#' df <- sim_panel(N = 25, T = 14, n_treated = 4, t0 = 11, att = 2, seed = 1)
+#' df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
 #' r <- panel_rmse(df, "y", "w", "id", "t",
-#'                 methods = c("DID", "MC", "TROP"),
-#'                 horizon = 3, n_pseudo = 5, n_runs = 4,
-#'                 control = trop_control(n_cv_cells = 40L, cv_cycles = 1L),
+#'                 methods = c("DID", "TROP"),
+#'                 horizon = 2, n_pseudo = 3, n_runs = 2,
+#'                 control = trop_control(n_cv_cells = 30L, cv_cycles = 1L),
 #'                 seed = 1)
 #' r
 #' autoplot(r)
