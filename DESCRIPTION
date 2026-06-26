@@ -27,6 +27,7 @@ Imports:
     utils
 Suggests:
     RSpectra,
+    future.apply,
     synthdid,
     gsynth,
     augsynth,

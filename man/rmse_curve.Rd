@@ -21,6 +21,7 @@ rmse_curve(
   anchor = "pooled",
   control = trop_control(),
   seed = 1L,
+  parallel = FALSE,
   verbose = FALSE
 )
 }
@@ -60,6 +61,12 @@ speed across the many fits).}
 \item{control}{Solver/CV controls from \code{\link[=trop_control]{trop_control()}}.}
 
 \item{seed}{Base integer seed (each replication uses a distinct offset).}
+
+\item{parallel}{Logical; if \code{TRUE} and the \code{future.apply} package is
+installed, the Monte Carlo tasks are run in parallel honouring the active
+\code{future} plan (e.g. \code{future::plan(future::multisession, workers = 6)}).
+Results are identical to the sequential default because each task is
+self-seeded. Default \code{FALSE}.}
 
 \item{verbose}{Logical; print progress per swept value.}
 }

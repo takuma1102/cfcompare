@@ -7,3 +7,5 @@
 ^Meta$
 ^dev$
 ^.*\.rds$
+^.*\.patch$
+^.*\.diff$

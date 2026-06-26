@@ -36,3 +36,7 @@ desktop.ini
 # public repo. The README figure itself (man/figures/*.png) is still tracked.
 dev/
 HANDOVER.md
+
+# --- patches (local only, never commit) ---
+*.patch
+*.diff

@@ -11,7 +11,8 @@ rmse_curves(values_control = NULL, values_pre = NULL, ...)
 \code{\link[=rmse_curve]{rmse_curve()}} defaults).}
 
 \item{...}{Passed to \code{\link[=rmse_curve]{rmse_curve()}} (\code{n_runs}, \code{methods}, base design, \code{att},
-\code{noise}, \code{control}, \code{seed}, \code{verbose}, ...).}
+\code{noise}, \code{control}, \code{seed}, \code{parallel}, \code{verbose}, ...). Set
+\code{parallel = TRUE} (plus a \code{future::plan}) to run both sweeps in parallel.}
 }
 \value{
 A \code{cf_rmse_curves} object: a list with \verb{$n_control} and \verb{$n_pre},

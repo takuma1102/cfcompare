@@ -4,6 +4,19 @@
 # Written independently; uses a semi-synthetic factor-model DGP with interactive
 # confounding so that plain DID is biased and the robust estimators are not.
 
+#' Sequential or parallel lapply. Uses future.apply::future_lapply when
+#' `parallel = TRUE` and the package is installed (honouring the future plan set
+#' by the user, e.g. future::plan(future::multisession)); otherwise base lapply.
+#' Results are identical either way because each task is self-seeded.
+#' @keywords internal
+#' @noRd
+.par_lapply <- function(X, FUN, parallel = FALSE) {
+  if (isTRUE(parallel) && requireNamespace("future.apply", quietly = TRUE)) {
+    return(future.apply::future_lapply(X, FUN, future.seed = TRUE))
+  }
+  lapply(X, FUN)
+}
+
 #' Default semi-synthetic generator: a richer factor model with interactive
 #' confounding. Y(0) combines unit/time fixed effects, several random-walk latent
 #' factors, heterogeneous unit-specific linear trends, and AR(1) idiosyncratic
@@ -91,6 +104,11 @@
 #'   speed across the many fits).
 #' @param control Solver/CV controls from [trop_control()].
 #' @param seed Base integer seed (each replication uses a distinct offset).
+#' @param parallel Logical; if `TRUE` and the `future.apply` package is
+#'   installed, the Monte Carlo tasks are run in parallel honouring the active
+#'   `future` plan (e.g. `future::plan(future::multisession, workers = 6)`).
+#'   Results are identical to the sequential default because each task is
+#'   self-seeded. Default `FALSE`.
 #' @param verbose Logical; print progress per swept value.
 #' @return A `cf_rmse_curve` (a `data.frame`) with columns `method`, `x`
 #'   (the swept value), `rmse`, `bias`, `n_runs`. The swept-dimension label is in
@@ -113,7 +131,7 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
                        rank = 4L, att = 2, noise = 1,
                        ar = 0.4, trend_sd = 0.05,
                        anchor = "pooled", control = trop_control(),
-                       seed = 1L, verbose = FALSE) {
+                       seed = 1L, parallel = FALSE, verbose = FALSE) {
   vary <- match.arg(vary)
   if (is.null(values)) {
     values <- if (vary == "n_control") seq(20L, 45L, by = 5L)
@@ -121,33 +139,45 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
   }
   values <- sort(unique(as.integer(values)))
 
-  rows <- list(); k <- 0L
-  for (v in values) {
+  # One Monte Carlo replication for a given (value, run). Each task is fully
+  # determined by its seed (.rmse_curve_gen re-seeds), so results are identical
+  # whether tasks run sequentially or in parallel.
+  one_task <- function(task) {
+    v <- task$v; r <- task$r
     nc <- if (vary == "n_control") v else n_control
     np <- if (vary == "n_pre") v else n_pre
-    est <- matrix(NA_real_, n_runs, length(methods),
-                  dimnames = list(NULL, methods))
-    for (r in seq_len(n_runs)) {
-      df <- .rmse_curve_gen(seed * 100000L + v * 100L + r,
-                            n_control = nc, n_treated = n_treated,
-                            n_pre = np, n_post = n_post,
-                            rank = rank, att = att, noise = noise,
-                            ar = ar, trend_sd = trend_sd)
-      cmp <- tryCatch(
-        suppressMessages(panel_compare(df, "y", "w", "id", "t",
-          methods = methods, se = "none", control = control, anchor = anchor)),
-        error = function(e) NULL)
-      if (!is.null(cmp)) est[r, cmp$att$method] <- cmp$att$estimate
-    }
+    df <- .rmse_curve_gen(seed * 100000L + v * 100L + r,
+                          n_control = nc, n_treated = n_treated,
+                          n_pre = np, n_post = n_post,
+                          rank = rank, att = att, noise = noise,
+                          ar = ar, trend_sd = trend_sd)
+    cmp <- tryCatch(
+      suppressMessages(panel_compare(df, "y", "w", "id", "t",
+        methods = methods, se = "none", control = control, anchor = anchor)),
+      error = function(e) NULL)
+    est <- stats::setNames(rep(NA_real_, length(methods)), methods)
+    if (!is.null(cmp)) est[cmp$att$method] <- cmp$att$estimate
+    est
+  }
+
+  grid <- expand.grid(r = seq_len(n_runs), vi = seq_along(values),
+                      KEEP.OUT.ATTRS = FALSE)
+  tasks <- lapply(seq_len(nrow(grid)),
+                  function(i) list(v = values[grid$vi[i]], r = grid$r[i]))
+  res <- .par_lapply(tasks, one_task, parallel = parallel)
+
+  rows <- list(); k <- 0L
+  for (vi in seq_along(values)) {
+    est <- do.call(rbind, res[grid$vi == vi])      # n_runs x methods, run order
     rmse <- sqrt(colMeans((est - att)^2, na.rm = TRUE))
     bias <- colMeans(est - att, na.rm = TRUE)
     for (m in methods) {
       k <- k + 1L
-      rows[[k]] <- data.frame(method = m, x = v, rmse = unname(rmse[m]),
+      rows[[k]] <- data.frame(method = m, x = values[vi], rmse = unname(rmse[m]),
                               bias = unname(bias[m]), n_runs = n_runs,
                               stringsAsFactors = FALSE)
     }
-    if (verbose) message(sprintf("  %s = %d done", vary, v))
+    if (verbose) message(sprintf("  %s = %d done", vary, values[vi]))
   }
   out <- do.call(rbind, rows)
   attr(out, "vary") <- vary
@@ -168,7 +198,8 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
 #' @param values_control,values_pre Optional grids for each sweep (see
 #'   [rmse_curve()] defaults).
 #' @param ... Passed to [rmse_curve()] (`n_runs`, `methods`, base design, `att`,
-#'   `noise`, `control`, `seed`, `verbose`, ...).
+#'   `noise`, `control`, `seed`, `parallel`, `verbose`, ...). Set
+#'   `parallel = TRUE` (plus a `future::plan`) to run both sweeps in parallel.
 #' @return A `cf_rmse_curves` object: a list with `$n_control` and `$n_pre`,
 #'   each a `cf_rmse_curve`.
 #' @seealso [rmse_curve()], [autoplot.cf_rmse_curves()]
