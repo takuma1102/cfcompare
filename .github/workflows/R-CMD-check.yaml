@@ -7,6 +7,10 @@ on:
 
 name: R-CMD-check
 
+concurrency:
+  group: R-CMD-check-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: read-all
 
 jobs:
