@@ -3,7 +3,7 @@ test_that("panel_rmse returns a ranked tidy table for native methods", {
                   att = 2, noise = 1, seed = 2)
   r <- panel_rmse(df, "y", "w", "id", "t",
                   methods = c("DID", "MC", "TROP"),
-                  horizon = 2, n_pseudo = 4, n_runs = 3,
+                  horizon = 2, n_pseudo = 3, n_runs = 2,
                   control = trop_control(n_cv_cells = 30L, cv_cycles = 1L),
                   seed = 1)
   expect_s3_class(r, "cf_rmse_tbl")

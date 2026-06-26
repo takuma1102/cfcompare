@@ -11,7 +11,15 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = requireNamespace("ggplot2", quietly = TRUE)
+  # The estimator chunks below run a full TROP cross-validation + jackknife.
+  # During R CMD build/check the vignette is knitted from scratch (twice:
+  # once at build, once when check re-builds vignette outputs), so leaving
+  # these live makes every check dominated by the vignette. We therefore run
+  # them ONLY when explicitly opted in. To render with live output locally:
+  #   Sys.setenv(CFCOMPARE_BUILD_VIGNETTE = "true")
+  #   devtools::build_vignettes()   # or pkgdown::build_site()
+  eval = nzchar(Sys.getenv("CFCOMPARE_BUILD_VIGNETTE")) &&
+    requireNamespace("ggplot2", quietly = TRUE)
 )
 ```
 
@@ -39,7 +47,7 @@ library(cfcompare)
 to treated cells, so we know the ground truth.
 
 ```{r sim}
-df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, rank = 3,
+df <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 7, rank = 2,
                 att = 2, noise = 1, seed = 1)
 head(df)
 ```
@@ -56,7 +64,7 @@ cmp <- panel_compare(
   outcome = "y", treatment = "w", unit = "id", time = "t",
   methods = c("DID", "MC", "TROP"),
   se = "jackknife",
-  control = trop_control(n_cv_cells = 30L, cv_cycles = 1L)
+  control = trop_control(n_cv_cells = 12L, cv_cycles = 1L)
 )
 cmp
 ```
@@ -97,7 +105,7 @@ on `L` — by leave-one-out on the control cells.
 
 ```{r trop-fit}
 fit <- trop(df, "y", "w", "id", "t", se = "jackknife",
-            control = trop_control(n_cv_cells = 30L, cv_cycles = 1L))
+            control = trop_control(n_cv_cells = 12L, cv_cycles = 1L))
 fit
 ```
 

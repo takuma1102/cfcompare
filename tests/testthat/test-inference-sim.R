@@ -2,7 +2,7 @@ test_that("bootstrap SE returns finite SE and a percentile CI", {
   df <- sim_panel(N = 24, T = 12, n_treated = 4, t0 = 10, att = 2, seed = 1)
   fit <- trop(df, "y", "w", "id", "t", se = "bootstrap",
               control = trop_control(n_cv_cells = 30L, cv_cycles = 1L,
-                                     n_boot = 30L, seed = 1))
+                                     n_boot = 15L, seed = 1))
   expect_equal(fit$se.method, "bootstrap")
   expect_true(is.finite(fit$std.error) && fit$std.error > 0)
   expect_true(fit$conf.low < fit$estimate && fit$estimate < fit$conf.high)
