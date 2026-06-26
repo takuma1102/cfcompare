@@ -5,7 +5,7 @@
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- badges: end -->
 
-> **Note** `cfcompare` is an independent R package
+> **Note: ** `cfcompare` is an independent R package
 > and not endorsed or maintained by the authors of the TROP estimator (Athey, Imbens, Qu &
 > Viviano, 2026). TROP software written by the authors
 > includes the Python package
