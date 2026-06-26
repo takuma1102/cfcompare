@@ -15,6 +15,18 @@
   if (is.infinite(tau)) {
     return(list(L = matrix(0, nrow(X), ncol(X)), rank = 0L, d = numeric(0)))
   }
+  # Optional fast path: when the nuclear-norm rank is small, a truncated SVD
+  # (RSpectra) is much faster than a full svd() on a large matrix. It is used
+  # only if RSpectra is installed, the matrix is reasonably large, and the user
+  # has not disabled it via options(cfcompare.truncated_svd = FALSE). The full
+  # svd() below is always the fallback and the default when RSpectra is absent,
+  # so results are unchanged unless you opt in.
+  if (isTRUE(getOption("cfcompare.truncated_svd", TRUE)) &&
+      min(dim(X)) > 50L &&
+      requireNamespace("RSpectra", quietly = TRUE)) {
+    res <- .svt_truncated(X, tau)
+    if (!is.null(res)) return(res)               # else fall through to full svd
+  }
   sv <- svd(X)
   d <- pmax(sv$d - tau, 0)
   r <- sum(d > 0)
@@ -24,6 +36,30 @@
   idx <- seq_len(r)
   L <- sv$u[, idx, drop = FALSE] %*%
     (d[idx] * t(sv$v[, idx, drop = FALSE]))
+  list(L = L, rank = r, d = d)
+}
+
+#' Truncated singular-value soft-thresholding via RSpectra.
+#' Computes only the leading singular triplets, doubling the count until the
+#' smallest computed singular value falls at/below `tau` (so every value above
+#' the threshold is captured -- giving the same SVT as a full SVD, to numerical
+#' tolerance). Returns NULL on failure so the caller can fall back to svd().
+#' @keywords internal
+#' @noRd
+.svt_truncated <- function(X, tau) {
+  mn <- min(dim(X))
+  k <- min(20L, mn - 1L)
+  repeat {
+    s <- tryCatch(RSpectra::svds(X, k = k), error = function(e) NULL)
+    if (is.null(s) || length(s$d) == 0L) return(NULL)
+    if (min(s$d) <= tau || k >= mn - 1L) break
+    k <- min(k * 2L, mn - 1L)
+  }
+  d <- pmax(s$d - tau, 0)
+  r <- sum(d > 0)
+  if (r == 0L) return(list(L = matrix(0, nrow(X), ncol(X)), rank = 0L, d = d))
+  idx <- seq_len(r)
+  L <- s$u[, idx, drop = FALSE] %*% (d[idx] * t(s$v[, idx, drop = FALSE]))
   list(L = L, rank = r, d = d)
 }
 

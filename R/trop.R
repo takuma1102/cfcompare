@@ -22,12 +22,15 @@
   ci <- (W[i, ] == 0)
   if (!is.null(t)) ci[t] <- FALSE
   yi <- Y[i, ]
-  d <- rep(NA_real_, N)
-  for (j in seq_len(N)) {
-    cj <- (W[j, ] == 0)
-    use <- ci & cj & is.finite(yi) & is.finite(Y[j, ])
-    if (any(use)) d[j] <- sqrt(mean((yi[use] - Y[j, use])^2))
-  }
+  bi <- ci & is.finite(yi)                       # usable columns from unit i
+  if (!any(bi)) return(rep(NA_real_, N))
+  # vectorised over control units j (same result as the old per-j loop)
+  useM <- (W == 0) & is.finite(Y) & matrix(bi, N, Tt, byrow = TRUE)
+  diff2 <- (Y - matrix(yi, N, Tt, byrow = TRUE))^2
+  diff2[!useM] <- 0
+  n <- rowSums(useM); ssq <- rowSums(diff2)
+  d <- rep(NA_real_, N); pos <- n > 0
+  d[pos] <- sqrt(ssq[pos] / n[pos])
   d
 }
 
@@ -81,14 +84,16 @@
 #' eq. (5).
 #' @keywords internal
 #' @noRd
-.trop_cv_Q <- function(Y, W, lam, ctrl, cv_cells) {
+.trop_cv_Q <- function(Y, W, lam, ctrl, cv_cells, du_list = NULL) {
   Tt <- ncol(Y)
   errs <- numeric(nrow(cv_cells))
   for (k in seq_len(nrow(cv_cells))) {
     i <- cv_cells[k, 1]; t <- cv_cells[k, 2]
     Wk <- W
     Wk[i, t] <- 1                       # hold this control cell out
-    du <- .unit_distance_to(Y, Wk, i, t)
+    # unit distances do not depend on the penalties: reuse a cached value when
+    # one is supplied (see .trop_select_lambda), else compute it here.
+    du <- if (is.null(du_list)) .unit_distance_to(Y, Wk, i, t) else du_list[[k]]
     wmat <- .trop_weight_matrix(du, t, Tt, lam)
     fit <- .trop_solve(Y, Wk, wmat, lam, ctrl)
     errs[k] <- (Y[i, t] - fit$M[i, t])^2
@@ -105,7 +110,15 @@
 #' @noRd
 .trop_select_lambda <- function(Y, W, grids, ctrl, cv_cells, verbose = FALSE) {
   lam <- list(time = 0, unit = 0, nn = Inf)
-  eval_one <- function(lam) .trop_cv_Q(Y, W, lam, ctrl, cv_cells)
+  # Unit distances for each held-out CV cell do not depend on the penalties, so
+  # compute them once and reuse across the whole penalty search (big saving:
+  # the search evaluates the CV criterion dozens of times).
+  du_cache <- lapply(seq_len(nrow(cv_cells)), function(k) {
+    i <- cv_cells[k, 1]; t <- cv_cells[k, 2]
+    Wk <- W; Wk[i, t] <- 1
+    .unit_distance_to(Y, Wk, i, t)
+  })
+  eval_one <- function(lam) .trop_cv_Q(Y, W, lam, ctrl, cv_cells, du_list = du_cache)
 
   pick <- function(lam, which, grid) {
     qs <- vapply(grid, function(v) {

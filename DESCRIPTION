@@ -26,6 +26,7 @@ Imports:
     stats,
     utils
 Suggests:
+    RSpectra,
     synthdid,
     gsynth,
     augsynth,
