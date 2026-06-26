@@ -1,4 +1,4 @@
-# *cfcompare*: R package implementing the TROP estimator and comparing it with other multiple ATT estimators
+# *cfcompare*: implementing the TROP (triply robust panel) estimator and comparing it with other multiple ATT estimators
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/takuma1102/nonabsdid/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/takuma1102/nonabsdid/actions/workflows/R-CMD-check.yaml)
