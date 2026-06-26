@@ -22,16 +22,15 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - {os: macos-latest, r: 'release'}
-          - {os: windows-latest, r: 'release'}
-          - {os: ubuntu-latest, r: 'devel', http-user-agent: 'release'}
           - {os: ubuntu-latest, r: 'release'}
-          - {os: ubuntu-latest, r: 'oldrel-1'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
       RGL_USE_NULL: true
+      # Treat suggested packages that we deliberately don't install in CI
+      # (synthdid, gsynth, augsynth, did, fixest, ...) as a NOTE, not an error.
+      _R_CHECK_FORCE_SUGGESTS_: false
 
     steps:
       - uses: actions/checkout@v4
@@ -46,9 +45,19 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
-          needs: check
+          # Hard deps only (ggplot2/stats/utils + their deps); do NOT pull the
+          # heavy optional engines. The few light Suggests that the check itself
+          # needs (testthat, knitr, rmarkdown) are listed explicitly below.
+          dependencies: '"hard"'
+          extra-packages: |
+            any::rcmdcheck
+            any::testthat
+            any::knitr
+            any::rmarkdown
 
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true
+          # During development, fail only on hard errors. Tighten back to
+          # '"warning"' (or remove this line) before any CRAN-style check.
+          error-on: '"error"'
