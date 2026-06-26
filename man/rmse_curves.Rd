@@ -31,7 +31,9 @@ g <- rmse_curves(values_control = c(30, 50), values_pre = c(8, 14),
                  n_runs = 2, methods = c("DID", "TROP"),
                  control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
 plot(g)                  # two separate figures (default)
-plot(g, combined = TRUE) # side-by-side, paper-style
+# combined = TRUE needs the optional 'patchwork' package:
+if (requireNamespace("patchwork", quietly = TRUE))
+  plot(g, combined = TRUE) # side-by-side, paper-style
 }
 }
 \seealso{

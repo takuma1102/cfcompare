@@ -211,7 +211,9 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
 #'                  n_runs = 2, methods = c("DID", "TROP"),
 #'                  control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
 #' plot(g)                  # two separate figures (default)
-#' plot(g, combined = TRUE) # side-by-side, paper-style
+#' # combined = TRUE needs the optional 'patchwork' package:
+#' if (requireNamespace("patchwork", quietly = TRUE))
+#'   plot(g, combined = TRUE) # side-by-side, paper-style
 #' }
 rmse_curves <- function(values_control = NULL, values_pre = NULL, ...) {
   cc <- rmse_curve("n_control", values = values_control, ...)
