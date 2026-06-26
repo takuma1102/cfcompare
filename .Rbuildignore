@@ -9,3 +9,4 @@
 ^.*\.rds$
 ^.*\.patch$
 ^.*\.diff$
+^\.lintr$
