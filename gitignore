@@ -1,0 +1,38 @@
+# --- R / RStudio session files ---
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# --- R build / check artifacts ---
+*.Rcheck/
+*.tar.gz
+*.tgz
+*.zip
+..Rcheck/
+/cfcompare.Rcheck/
+
+# --- caches / temp ---
+*.rds
+*.RDS
+.Rapp.history
+src/*.o
+src/*.so
+src/*.dll
+
+# --- OS clutter ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- editor ---
+.vscode/
+*.swp
+*~
+
+# --- private / non-public material (do NOT publish) ---
+# Figure-generation code and the internal handover note are kept out of the
+# public repo. The README figure itself (man/figures/*.png) is still tracked.
+dev/
+HANDOVER.md

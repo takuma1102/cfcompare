@@ -1,0 +1,25 @@
+# Normalize all text files to LF in the repository (R packages expect LF).
+* text=auto eol=lf
+
+# Explicit text types
+*.R    text eol=lf
+*.Rd   text eol=lf
+*.Rmd  text eol=lf
+*.md   text eol=lf
+*.Rproj text eol=lf
+DESCRIPTION text eol=lf
+NAMESPACE   text eol=lf
+CITATION    text eol=lf
+LICENSE     text eol=lf
+
+# Binary files (never touch line endings)
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.pdf  binary
+*.gz   binary
+*.tgz  binary
+*.zip  binary
+*.rds  binary
+*.RData binary
