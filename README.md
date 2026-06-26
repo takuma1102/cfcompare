@@ -94,6 +94,14 @@ it makes a natural backbone for an estimator-comparison package.
 pak::pak("takuma1102/cfcompare")
 ```
 
+You can use R-universe as well.
+```r
+install.packages("cfcompare",
+  repos = c("https://takuma1102.r-universe.dev",
+            "https://cloud.r-project.org"))
+```
+
+
 `synthdid`, `gsynth` and `fixest` are in `Suggests` — install the ones you plan
 to use.
 
