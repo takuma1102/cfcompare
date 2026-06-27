@@ -9,6 +9,7 @@ rmse_curve(
   values = NULL,
   n_runs = 500L,
   methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
+  exclude = NULL,
   n_control = 60L,
   n_treated = 8L,
   n_pre = 16L,
@@ -42,6 +43,9 @@ estimators this is a large simulation (thousands of fits per panel); reduce
 methods. Default \code{c("DID", "SDID", "SC", "MC", "DIFP", "TROP")}, the six
 estimators compared in the paper. \code{gsynth}, \code{augsynth} and \code{CS} can be added
 if those packages are installed.}
+
+\item{exclude}{Optional character vector of methods to drop from \code{methods}
+(e.g. \code{exclude = "DIFP"}). Unknown names are ignored with a warning.}
 
 \item{n_control, n_treated, n_pre, n_post}{Base design; the dimension named in
 \code{vary} is overridden by \code{values}, the rest are held fixed. Defaults give a

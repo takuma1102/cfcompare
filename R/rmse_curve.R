@@ -115,6 +115,8 @@
 #'   methods. Default `c("DID", "SDID", "SC", "MC", "DIFP", "TROP")`, the six
 #'   estimators compared in the paper. `gsynth`, `augsynth` and `CS` can be added
 #'   if those packages are installed.
+#' @param exclude Optional character vector of methods to drop from `methods`
+#'   (e.g. `exclude = "DIFP"`). Unknown names are ignored with a warning.
 #' @param n_control,n_treated,n_pre,n_post Base design; the dimension named in
 #'   `vary` is overridden by `values`, the rest are held fixed. Defaults give a
 #'   sizeable panel (60 controls, 8 treated, 16 pre- and 6 post-periods).
@@ -149,6 +151,7 @@
 rmse_curve <- function(vary = c("n_control", "n_pre"),
                        values = NULL, n_runs = 500L,
                        methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
+                       exclude = NULL,
                        n_control = 60L, n_treated = 8L,
                        n_pre = 16L, n_post = 6L,
                        rank = 4L, att = 2, noise = 1,
@@ -156,6 +159,9 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
                        anchor = "pooled", control = trop_control(),
                        seed = 1L, parallel = FALSE, verbose = FALSE) {
   vary <- match.arg(vary)
+  methods <- .resolve_methods(
+    methods, exclude,
+    c("DID", "SDID", "SC", "MC", "DIFP", "TROP", "gsynth", "augsynth", "CS"))
   if (is.null(values)) {
     values <- if (vary == "n_control") seq(20L, 45L, by = 5L)
               else seq(5L, 38L, by = 2L)

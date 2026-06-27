@@ -13,7 +13,12 @@
 #'
 #' @inheritParams trop
 #' @param methods Character vector of methods to run. Any of `"DID"`, `"SDID"`,
-#'   `"SC"`, `"MC"`, `"TROP"`, `"gsynth"`.
+#'   `"SC"`, `"MC"`, `"DIFP"`, `"TROP"`, `"gsynth"`, `"augsynth"`, `"CS"`.
+#'   Defaults to the native engines plus SDID: `c("DID", "SDID", "MC", "TROP",
+#'   "DIFP")`.
+#' @param exclude Optional character vector of methods to drop from `methods`
+#'   (after defaults are applied). Convenient for running "everything except one",
+#'   e.g. `exclude = "DIFP"`. Unknown names are ignored with a warning.
 #' @param anchor Weight anchoring for TROP; see [trop()].
 #' @param se Standard-error method for the native engines; see [trop()].
 #' @return An object of class `cf_comparison`: a list with the tidy table
@@ -28,19 +33,15 @@
 #' cmp$att
 #' @export
 panel_compare <- function(data, outcome, treatment, unit, time,
-                          methods = c("DID", "SDID", "MC", "TROP"),
+                          methods = c("DID", "SDID", "MC", "TROP", "DIFP"),
+                          exclude = NULL,
                           anchor = "auto",
                           se = c("auto", "jackknife", "bootstrap", "placebo", "none"),
                           control = trop_control(),
                           verbose = FALSE) {
   se <- match.arg(se)
-  methods <- unique(methods)
   known <- c("DID", "SDID", "SC", "MC", "DIFP", "TROP", "gsynth", "augsynth", "CS")
-  bad <- setdiff(methods, known)
-  if (length(bad)) {
-    stop("Unknown method(s): ", paste(bad, collapse = ", "),
-         ". Choose from ", paste(known, collapse = ", "), ".", call. = FALSE)
-  }
+  methods <- .resolve_methods(methods, exclude, known)
 
   m <- .panel_to_matrices(data, outcome, treatment, unit, time)
   Y <- m$Y; W <- m$W

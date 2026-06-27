@@ -76,6 +76,12 @@ schema.
 cmp$att
 ```
 
+Here `methods` was given explicitly. If you omit it, `panel_compare()` runs its
+default set --- `DID`, `SDID`, `MC`, `TROP`, and `DIFP` (the native engines plus
+synthetic DID). To run the defaults without a particular method, pass `exclude`
+rather than retyping the list, e.g. `panel_compare(..., exclude = "DIFP")`. The
+same `methods` / `exclude` arguments work in `panel_rmse()` and `rmse_curve()`.
+
 Every estimate carries the number of treated cells and units, the estimated rank
 of the low-rank component `L` (for the native engines), and a `note` column that
 records anything that was skipped.

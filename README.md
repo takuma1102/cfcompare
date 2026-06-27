@@ -60,9 +60,12 @@ not apply to the design — are skipped with a message, and the remaining method
 still produce output.
 
 By default, `panel_compare()` runs `DID`, `SDID`, `MC`, `TROP`, and `DIFP`.
-`CS` (Callaway &
-Sant'Anna) is available as an opt-in: add them via `methods = `. Take note that `CS` is not part of the original TROP paper's comparison set and
-requires an absorbing (staggered/block) treatment.
+`gsynth`, `augsynth`, and `CS` (Callaway & Sant'Anna) are opt-in — add them via
+`methods =`. To run the defaults minus a method, use `exclude =` (e.g.
+`exclude = "DIFP"`) instead of retyping the whole list; `methods` and `exclude`
+work the same way in `panel_rmse()` and `rmse_curve()`. Take note that `CS` is
+not part of the original TROP paper's comparison set and requires an absorbing
+(staggered/block) treatment.
 
 ## Why TROP
 

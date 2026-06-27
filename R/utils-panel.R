@@ -98,3 +98,31 @@
     block_t0 = t0
   )
 }
+
+# Resolve the set of estimators to run for the comparison entry points
+# (panel_compare(), panel_rmse(), rmse_curve()). De-duplicates `methods`,
+# validates them against `known`, then drops anything named in `exclude`. Keeping
+# this in one place means the `methods` / `exclude` semantics and error messages
+# stay identical across the user-facing functions.
+.resolve_methods <- function(methods, exclude, known) {
+  methods <- unique(methods)
+  bad <- setdiff(methods, known)
+  if (length(bad)) {
+    stop("Unknown method(s): ", paste(bad, collapse = ", "),
+         ". Choose from ", paste(known, collapse = ", "), ".", call. = FALSE)
+  }
+  if (!is.null(exclude)) {
+    exclude <- unique(exclude)
+    exbad <- setdiff(exclude, known)
+    if (length(exbad)) {
+      warning("Ignoring unknown method(s) in `exclude`: ",
+              paste(exbad, collapse = ", "), call. = FALSE)
+    }
+    methods <- setdiff(methods, exclude)
+    if (!length(methods)) {
+      stop("`exclude` removed every requested method; nothing to run.",
+           call. = FALSE)
+    }
+  }
+  methods
+}

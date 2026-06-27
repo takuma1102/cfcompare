@@ -10,7 +10,8 @@ panel_rmse(
   treatment,
   unit,
   time,
-  methods = c("DID", "SC", "SDID", "MC", "TROP"),
+  methods = c("DID", "SC", "SDID", "MC", "TROP", "DIFP"),
+  exclude = NULL,
   metric = c("placebo", "prediction"),
   horizon = 10L,
   n_pseudo = 10L,
@@ -26,10 +27,15 @@ panel_rmse(
 \item{outcome, treatment, unit, time}{Column names (strings).}
 
 \item{methods}{Methods to compare; subset of \code{"DID"}, \code{"MC"}, \code{"TROP"},
-\code{"SDID"}, \code{"SC"}, \code{"gsynth"}, \code{"augsynth"}, \code{"CS"}.}
+\code{"DIFP"}, \code{"SDID"}, \code{"SC"}, \code{"gsynth"}, \code{"augsynth"}, \code{"CS"}. Defaults to
+\code{c("DID", "SC", "SDID", "MC", "TROP", "DIFP")}.}
+
+\item{exclude}{Optional character vector of methods to drop from \code{methods}
+(e.g. \code{exclude = "DIFP"}). Unknown names are ignored with a warning.}
 
 \item{metric}{\code{"placebo"} (placebo-ATT RMSE, all methods) or \code{"prediction"}
-(per-cell held-out RMSE, native methods only).}
+(per-cell held-out RMSE, native methods \code{"DID"}/\code{"MC"}/\code{"TROP"} only; other
+methods, including \code{"DIFP"}, are ignored for this metric).}
 
 \item{horizon}{Number of final periods held out per placebo cohort.}
 

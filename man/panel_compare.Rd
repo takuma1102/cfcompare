@@ -10,7 +10,8 @@ panel_compare(
   treatment,
   unit,
   time,
-  methods = c("DID", "SDID", "MC", "TROP"),
+  methods = c("DID", "SDID", "MC", "TROP", "DIFP"),
+  exclude = NULL,
   anchor = "auto",
   se = c("auto", "jackknife", "bootstrap", "placebo", "none"),
   control = trop_control(),
@@ -25,7 +26,12 @@ a 0/1 indicator of \emph{active} treatment in that cell (works for block,
 staggered, and non-absorbing designs).}
 
 \item{methods}{Character vector of methods to run. Any of \code{"DID"}, \code{"SDID"},
-\code{"SC"}, \code{"MC"}, \code{"TROP"}, \code{"gsynth"}.}
+\code{"SC"}, \code{"MC"}, \code{"DIFP"}, \code{"TROP"}, \code{"gsynth"}, \code{"augsynth"}, \code{"CS"}.
+Defaults to the native engines plus SDID: \code{c("DID", "SDID", "MC", "TROP", "DIFP")}.}
+
+\item{exclude}{Optional character vector of methods to drop from \code{methods}
+(after defaults are applied). Convenient for running "everything except one",
+e.g. \code{exclude = "DIFP"}. Unknown names are ignored with a warning.}
 
 \item{anchor}{Weight anchoring for TROP; see \code{\link[=trop]{trop()}}.}
 

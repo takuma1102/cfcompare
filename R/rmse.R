@@ -52,9 +52,13 @@
 #' @param data A long `data.frame`, one row per unit-time.
 #' @param outcome,treatment,unit,time Column names (strings).
 #' @param methods Methods to compare; subset of `"DID"`, `"MC"`, `"TROP"`,
-#'   `"SDID"`, `"SC"`, `"gsynth"`, `"augsynth"`, `"CS"`.
+#'   `"DIFP"`, `"SDID"`, `"SC"`, `"gsynth"`, `"augsynth"`, `"CS"`. Defaults to
+#'   `c("DID", "SC", "SDID", "MC", "TROP", "DIFP")`.
+#' @param exclude Optional character vector of methods to drop from `methods`
+#'   (e.g. `exclude = "DIFP"`). Unknown names are ignored with a warning.
 #' @param metric `"placebo"` (placebo-ATT RMSE, all methods) or `"prediction"`
-#'   (per-cell held-out RMSE, native methods only).
+#'   (per-cell held-out RMSE, native methods `"DID"`/`"MC"`/`"TROP"` only; other
+#'   methods, including `"DIFP"`, are ignored for this metric).
 #' @param horizon Number of final periods held out per placebo cohort.
 #' @param n_pseudo Number of placebo (pseudo-treated) control units per run.
 #' @param n_runs Number of placebo runs to average over.
@@ -79,18 +83,14 @@
 #' autoplot(r)
 #' }
 panel_rmse <- function(data, outcome, treatment, unit, time,
-                       methods = c("DID", "SC", "SDID", "MC", "TROP"),
+                       methods = c("DID", "SC", "SDID", "MC", "TROP", "DIFP"),
+                       exclude = NULL,
                        metric = c("placebo", "prediction"),
                        horizon = 10L, n_pseudo = 10L, n_runs = 10L,
                        control = trop_control(), seed = NULL, verbose = FALSE) {
   metric <- match.arg(metric)
-  methods <- unique(methods)
   known <- c("DID", "SC", "SDID", "MC", "DIFP", "TROP", "gsynth", "augsynth", "CS")
-  bad <- setdiff(methods, known)
-  if (length(bad)) {
-    stop("Unknown method(s): ", paste(bad, collapse = ", "),
-         ". Choose from ", paste(known, collapse = ", "), ".", call. = FALSE)
-  }
+  methods <- .resolve_methods(methods, exclude, known)
 
   m <- .panel_to_matrices(data, outcome, treatment, unit, time)
   Y <- m$Y; W <- m$W
@@ -133,7 +133,7 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
     # work below is deterministic and runs in parallel when workers > 1.
     pseudo_list <- lapply(seq_len(n_runs), function(r) sample(controls, n_pseudo))
     par <- (control$workers %||% 1L) > 1L
-    one_run <- function(pseudo) {
+    one_pred_run <- function(pseudo) {
       excl <- W; excl[pseudo, held_periods] <- 1
       fit_mask <- 1 - excl
       H <- cbind(rep(pseudo, each = length(held_periods)),
@@ -152,7 +152,7 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
     }
     if (verbose) message("RMSE: ", n_runs, " prediction run(s)")
     runs <- .with_workers(control$workers %||% 1L,
-                          .par_lapply(pseudo_list, one_run, parallel = par))
+                          .par_lapply(pseudo_list, one_pred_run, parallel = par))
     run_rmse <- do.call(rbind, runs)
     if (is.null(dim(run_rmse)))
       run_rmse <- matrix(run_rmse, nrow = n_runs,
@@ -183,7 +183,7 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
     # otherwise self-contained and runs in parallel when workers > 1.
     ps_list <- lapply(seq_len(n_runs), function(r) sample(seq_len(ncy), n_pseudo))
     par <- (control$workers %||% 1L) > 1L
-    one_run <- function(ps) {
+    one_placebo_run <- function(ps) {
       Wp <- matrix(0, ncy, Tt, dimnames = dimnames(Yc))
       Wp[ps, held_periods] <- 1
       patp <- .assignment_pattern(Wp)
@@ -215,7 +215,7 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
     }
     if (verbose) message("placebo: ", n_runs, " run(s)")
     runs <- .with_workers(control$workers %||% 1L,
-                          .par_lapply(ps_list, one_run, parallel = par))
+                          .par_lapply(ps_list, one_placebo_run, parallel = par))
     run_att <- do.call(rbind, lapply(runs, `[[`, "att"))
     if (is.null(dim(run_att)))
       run_att <- matrix(run_att, nrow = n_runs, dimnames = list(NULL, methods))
