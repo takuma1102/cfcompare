@@ -17,6 +17,29 @@
   lapply(X, FUN)
 }
 
+#' Evaluate `expr` with a transient parallel `future` plan.
+#'
+#' When `workers > 1` and the `future`/`future.apply` packages are installed, a
+#' `multisession` plan with that many workers is set up for the duration of
+#' `expr` and the previously active plan is restored afterwards. This lets the
+#' embarrassingly parallel inner loops (which call `.par_lapply()`) share one
+#' worker pool instead of paying start-up costs on every call. When `workers` is
+#' `1`, or the packages are unavailable, `expr` runs unchanged in the current
+#' process, so the code path still works with only base R installed.
+#' @keywords internal
+#' @noRd
+.with_workers <- function(workers, expr) {
+  workers <- if (is.null(workers)) 1L else workers
+  if (workers > 1L &&
+      requireNamespace("future", quietly = TRUE) &&
+      requireNamespace("future.apply", quietly = TRUE)) {
+    oplan <- future::plan()
+    on.exit(future::plan(oplan), add = TRUE)
+    future::plan(future::multisession, workers = workers)
+  }
+  force(expr)
+}
+
 #' Default semi-synthetic generator: a richer factor model with interactive
 #' confounding. Y(0) combines unit/time fixed effects, several random-walk latent
 #' factors, heterogeneous unit-specific linear trends, and AR(1) idiosyncratic

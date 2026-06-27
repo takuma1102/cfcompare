@@ -68,10 +68,11 @@
 #' Solves eq. (2) once for the supplied weights and returns the fitted matrix.
 #' @keywords internal
 #' @noRd
-.trop_solve <- function(Y, W, wmat, lam, ctrl) {
+.trop_solve <- function(Y, W, wmat, lam, ctrl, L_init = NULL) {
   mask <- (W == 0) * 1
   .mcnnm_fit(Y, mask, wmat, lam$nn,
-             max_iter = ctrl$max_iter, tol = ctrl$tol)
+             max_iter = ctrl$max_iter, tol = ctrl$tol,
+             L_init = L_init, svd_method = ctrl$svd %||% "truncated")
 }
 
 # ---- leave-one-out cross-validation (eq. 4-5) ------------------------------
@@ -86,8 +87,7 @@
 #' @noRd
 .trop_cv_Q <- function(Y, W, lam, ctrl, cv_cells, du_list = NULL) {
   Tt <- ncol(Y)
-  errs <- numeric(nrow(cv_cells))
-  for (k in seq_len(nrow(cv_cells))) {
+  one <- function(k) {
     i <- cv_cells[k, 1]; t <- cv_cells[k, 2]
     Wk <- W
     Wk[i, t] <- 1                       # hold this control cell out
@@ -96,8 +96,11 @@
     du <- if (is.null(du_list)) .unit_distance_to(Y, Wk, i, t) else du_list[[k]]
     wmat <- .trop_weight_matrix(du, t, Tt, lam)
     fit <- .trop_solve(Y, Wk, wmat, lam, ctrl)
-    errs[k] <- (Y[i, t] - fit$M[i, t])^2
+    (Y[i, t] - fit$M[i, t])^2
   }
+  par <- (ctrl$workers %||% 1L) > 1L
+  errs <- unlist(.par_lapply(seq_len(nrow(cv_cells)), one, parallel = par),
+                 use.names = FALSE)
   mean(errs)
 }
 
@@ -260,6 +263,7 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @noRd
 .trop_engine <- function(Y, W, pat, lambda, grids, control, anchor, se,
                          conf_level, verbose = FALSE) {
+ .with_workers(control$workers %||% 1L, {
   # ---- choose penalties via CV (unless supplied) ----
   if (is.null(lambda)) {
     cv_cells <- .sample_control_cells(W, control$n_cv_cells, control$seed)
@@ -288,6 +292,7 @@ trop <- function(data, outcome, treatment, unit, time,
     counterfactual = est$Mhat,
     rank = est$rank
   )
+ })
 }
 
 #' @keywords internal
@@ -336,13 +341,15 @@ trop <- function(data, outcome, treatment, unit, time,
     rnk <- fit$rank
   } else {
     ranks <- integer(nrow(treated_cells))
+    L_prev <- NULL                      # warm start: reuse the previous cell's L
     for (k in seq_len(nrow(treated_cells))) {
       i <- treated_cells[k, 1]; t <- treated_cells[k, 2]
       du <- .unit_distance_to(Y, W, i, t)
       wmat <- .trop_weight_matrix(du, t, Tt, lam)
-      fit <- .trop_solve(Y, W, wmat, lam, ctrl)
+      fit <- .trop_solve(Y, W, wmat, lam, ctrl, L_init = L_prev)
       Mhat[i, t] <- fit$M[i, t]
       ranks[k] <- fit$rank
+      L_prev <- fit$L                   # consecutive cells share dimensions
     }
     rnk <- round(mean(ranks))
   }
@@ -371,15 +378,15 @@ trop <- function(data, outcome, treatment, unit, time,
     tu <- pat$treated_units
     G <- length(tu)
     if (G < 2) return(na_out)
-    atts <- numeric(G)
-    for (g in seq_len(G)) {
+    par <- (ctrl$workers %||% 1L) > 1L
+    atts <- unlist(.par_lapply(seq_len(G), function(g) {
       drop <- tu[g]
       keep <- setdiff(seq_len(nrow(Y)), drop)
       Yk <- Y[keep, , drop = FALSE]
       Wk <- W[keep, , drop = FALSE]
       patk <- .assignment_pattern(Wk)
-      atts[g] <- .trop_att(Yk, Wk, lam, ctrl, anchor, patk)$att
-    }
+      .trop_att(Yk, Wk, lam, ctrl, anchor, patk)$att
+    }, parallel = par), use.names = FALSE)
     v <- (G - 1) / G * sum((atts - mean(atts))^2)
     se <- sqrt(v)
   } else if (method == "bootstrap") {
@@ -394,18 +401,24 @@ trop <- function(data, outcome, treatment, unit, time,
       old <- .Random.seed_safe(); on.exit(.Random.seed_restore(old), add = TRUE)
       set.seed(ctrl$seed)
     }
-    boot <- rep(NA_real_, B)
-    for (b in seq_len(B)) {
-      idx <- c(sample(tu, length(tu), replace = TRUE),
-               sample(co, length(co), replace = TRUE))
+    # Draw all resample index sets up front (reproducible given the seed); the
+    # ATT solves below are deterministic, so they can be evaluated in parallel
+    # without affecting the draws.
+    idx_list <- lapply(seq_len(B), function(b)
+      c(sample(tu, length(tu), replace = TRUE),
+        sample(co, length(co), replace = TRUE)))
+    par <- (ctrl$workers %||% 1L) > 1L
+    one_boot <- function(idx) {
       Yb <- Y[idx, , drop = FALSE]; Wb <- W[idx, , drop = FALSE]
       rownames(Yb) <- rownames(Wb) <- as.character(seq_along(idx))
       patb <- .assignment_pattern(Wb)
       if (patb$n_treated_units < 1 || length(setdiff(seq_len(nrow(Yb)),
-          patb$treated_units)) < 1) next
-      boot[b] <- tryCatch(.trop_att(Yb, Wb, lam, ctrl, anchor, patb)$att,
-                          error = function(e) NA_real_)
+          patb$treated_units)) < 1) return(NA_real_)
+      tryCatch(.trop_att(Yb, Wb, lam, ctrl, anchor, patb)$att,
+               error = function(e) NA_real_)
     }
+    boot <- unlist(.par_lapply(idx_list, one_boot, parallel = par),
+                   use.names = FALSE)
     boot <- boot[is.finite(boot)]
     if (length(boot) < 2) return(na_out)
     se <- stats::sd(boot)
@@ -423,14 +436,14 @@ trop <- function(data, outcome, treatment, unit, time,
     treat_pattern <- W[pat$treated_units, , drop = FALSE]
     # replicate the treated cells' time pattern onto each control unit
     tcols <- which(colSums(treat_pattern) > 0)
-    placebo <- numeric(length(controls))
-    for (k in seq_along(controls)) {
+    par <- (ctrl$workers %||% 1L) > 1L
+    placebo <- unlist(.par_lapply(seq_along(controls), function(k) {
       ci <- controls[k]
       Wp <- matrix(0, nrow(Y), ncol(Y), dimnames = dimnames(Y))
       Wp[ci, tcols] <- 1
       patp <- .assignment_pattern(Wp)
-      placebo[k] <- .trop_att(Y, Wp, lam, ctrl, anchor, patp)$att
-    }
+      .trop_att(Y, Wp, lam, ctrl, anchor, patp)$att
+    }, parallel = par), use.names = FALSE)
     se <- stats::sd(placebo)
   }
   list(se = se,
@@ -450,6 +463,18 @@ trop <- function(data, outcome, treatment, unit, time,
 #'   (`se = "bootstrap"`).
 #' @param boot_ci Bootstrap confidence-interval type: `"percentile"` or
 #'   `"normal"`.
+#' @param svd Singular-value decomposition used by the soft-impute solver:
+#'   `"truncated"` (default) computes only the leading singular triplets with
+#'   `RSpectra` when it is installed and the matrix is large enough to benefit,
+#'   falling back to the full SVD otherwise; `"full"` always uses the exact base
+#'   R `svd()`. The two agree to numerical tolerance; `"truncated"` is faster on
+#'   large panels, `"full"` is used for exact numerical-agreement checks.
+#' @param workers Number of parallel workers for the embarrassingly parallel
+#'   loops (cross-validation cells, and the bootstrap / jackknife / placebo
+#'   replicates). `1` (default) runs serially. Values `> 1` use
+#'   `future.apply`/`future` when installed (a transient `multisession` plan is
+#'   set up and restored automatically); if those packages are missing it falls
+#'   back to serial with no error. Results are reproducible given `seed`.
 #' @param seed Optional seed for CV cell sampling (reproducibility).
 #' @return A list of control parameters.
 #' @export
@@ -457,11 +482,15 @@ trop_control <- function(max_iter = 200L, tol = 1e-5,
                          n_cv_cells = 120L, cv_cycles = 2L,
                          max_cells = 60L, conf_level = 0.95,
                          n_boot = 200L, boot_ci = c("percentile", "normal"),
+                         svd = c("truncated", "full"),
+                         workers = 1L,
                          seed = NULL) {
   boot_ci <- match.arg(boot_ci)
+  svd <- match.arg(svd)
   list(max_iter = max_iter, tol = tol, n_cv_cells = n_cv_cells,
        cv_cycles = cv_cycles, max_cells = max_cells,
        conf_level = conf_level, n_boot = n_boot, boot_ci = boot_ci,
+       svd = svd, workers = workers,
        seed = seed)
 }
 

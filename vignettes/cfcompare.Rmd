@@ -164,6 +164,29 @@ Standard errors from the native engines are **jackknife**
 approximations; see Section 6 of the paper for the estimator's formal inference
 theory.
 
+## Performance
+
+The native solver runs on base R by default, but two settings speed it up on
+larger panels (both via `trop_control()`):
+
+* **`svd`** — the soft-impute step uses a **truncated SVD by default**
+  (`svd = "truncated"`), computing only the leading singular triplets with
+  `RSpectra` when it is installed (and falling back to the full base-R `svd()`
+  otherwise). The TROP paper explicitly permits a truncated decomposition for the
+  low-rank step, and it matches the full SVD to numerical tolerance. Pass
+  `svd = "full"` to force the exact full decomposition; that is what the README's
+  numerical-agreement checks against the official Python package use, so the
+  comparison is exact rather than up to truncation tolerance.
+* **`workers`** — the bootstrap / jackknife / placebo standard errors, the
+  cross-validation cells, and the `panel_rmse()` placebo runs are run in parallel
+  when `workers > 1` (using `future.apply`/`future`, if installed). Estimates
+  remain reproducible given `seed`.
+
+```{r perf, eval = FALSE}
+trop(df, "y", "w", "id", "t", se = "bootstrap",
+     control = trop_control(svd = "truncated", workers = 4))
+```
+
 ## Reference
 
 Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025). *Triply Robust Panel

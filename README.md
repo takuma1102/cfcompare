@@ -277,7 +277,10 @@ equations in the paper. As a correctness check only — not because any code was
 shared or ported — its output was compared against the authors' official Python
 package (PyPI [`trop`](https://pypi.org/project/trop/),
 `ostasovskyi/TROP-Estimator`) on identical panels, and the numbers line up where
-the two are exactly comparable:
+the two are exactly comparable. By default the solver uses a **truncated SVD**
+(see [Performance](#performance)); these agreement checks were run with the
+**full SVD** (`trop_control(svd = "full")`) so the comparison is exact rather
+than up to truncation tolerance:
 
 - On the comparable special case (uniform weights, `lambda_nn = Inf`, i.e.
   weighted two-way fixed effects), the two agree to numerical tolerance (e.g.
@@ -303,6 +306,39 @@ convex-solver implementation (qualitative behaviour matches; exact digits do
 not). For `SDID`/`SC`, `cfcompare` wraps the R
 [`synthdid`](https://github.com/synth-inference/synthdid) package; `augsynth`,
 `gsynth` and `did` (Callaway–Sant'Anna) are wrapped as optional engines.
+
+## Performance
+
+[#performance](#performance)
+
+The native solver has three knobs, all on [`trop_control()`](#running-a-single-estimator):
+
+- **Truncated SVD (default).** The soft-impute step needs only the leading
+  singular triplets — which the TROP paper explicitly permits for the low-rank
+  step — so `svd = "truncated"` uses
+  [`RSpectra::svds`](https://cran.r-project.org/package=RSpectra) when it is
+  installed and the matrix is large enough to benefit, and falls back to the full
+  base-R `svd()` otherwise. This is the **default**; it agrees with the full SVD
+  to numerical tolerance and is markedly faster on large panels. Use
+  `trop_control(svd = "full")` to force the exact full decomposition (e.g. for
+  bit-level comparisons — the numerical-agreement checks above use it).
+- **Parallel replicates.** The bootstrap / jackknife / placebo standard errors
+  and the cross-validation cells are embarrassingly parallel. Set
+  `trop_control(workers = N)` to spread them over `N` workers (uses
+  `future.apply`/`future` when installed; serial otherwise). Results stay
+  reproducible given `seed`.
+- **Warm starts.** When TROP re-solves the working model for each treated cell
+  (`anchor = "per_cell"`), each solve is initialised from the previous cell's
+  low-rank fit, so the soft-impute iterations converge in fewer steps.
+
+```r
+fit <- trop(df, "y", "w", "id", "t", se = "bootstrap",
+            control = trop_control(svd = "truncated", workers = 4, n_boot = 400))
+```
+
+The defaults still depend only on base R, so the package runs with none of the
+optional packages installed — the truncated SVD and parallel paths simply
+activate when `RSpectra` / `future.apply` are present.
 
 ## Status
 

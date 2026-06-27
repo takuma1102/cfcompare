@@ -13,6 +13,22 @@
 
 ## Unreleased
 
+* Performance: `trop_control()` gains `svd` and `workers`.
+  - `svd = "truncated"` (new default) solves the soft-impute step with a
+    truncated SVD (`RSpectra::svds`) when available and beneficial, falling back
+    to the full base-R `svd()`; `svd = "full"` forces the exact full
+    decomposition (used for the numerical-agreement checks). Replaces the old
+    `options(cfcompare.truncated_svd=)` switch.
+  - `workers > 1` runs the embarrassingly parallel loops -- cross-validation
+    cells and the bootstrap / jackknife / placebo replicates, plus the
+    `panel_rmse()` placebo runs -- in parallel via `future.apply`/`future`
+    (serial fallback when absent). Resampling draws are generated up front so
+    results stay reproducible given `seed` (exact bootstrap draws may differ from
+    earlier serial versions).
+  - Warm starts: in `anchor = "per_cell"`, each treated cell's soft-impute solve
+    is initialised from the previous cell's low-rank fit.
+  - The package still runs on base R alone; the optional paths activate only when
+    `RSpectra` / `future.apply` are installed.
 * `panel_rmse()` and `autoplot()` for it: cross-model out-of-sample RMSE
   comparison (the "random blocks" placebo validation from the doubly/triply
   robust panel estimator paper), visualised as a ranked bar chart.

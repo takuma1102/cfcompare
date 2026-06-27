@@ -13,6 +13,8 @@ trop_control(
   conf_level = 0.95,
   n_boot = 200L,
   boot_ci = c("percentile", "normal"),
+  svd = c("truncated", "full"),
+  workers = 1L,
   seed = NULL
 )
 }
@@ -34,6 +36,20 @@ trop_control(
 
 \item{boot_ci}{Bootstrap confidence-interval type: \code{"percentile"} or
 \code{"normal"}.}
+
+\item{svd}{Singular-value decomposition used by the soft-impute solver:
+\code{"truncated"} (default) computes only the leading singular triplets with
+\code{RSpectra} when it is installed and the matrix is large enough to benefit,
+falling back to the full SVD otherwise; \code{"full"} always uses the exact base
+R \code{svd()}. The two agree to numerical tolerance; \code{"truncated"} is faster on
+large panels, \code{"full"} is used for exact numerical-agreement checks.}
+
+\item{workers}{Number of parallel workers for the embarrassingly parallel
+loops (cross-validation cells, and the bootstrap / jackknife / placebo
+replicates). \code{1} (default) runs serially. Values \verb{> 1} use
+\code{future.apply}/\code{future} when installed (a transient \code{multisession} plan is
+set up and restored automatically); if those packages are missing it falls
+back to serial with no error. Results are reproducible given \code{seed}.}
 
 \item{seed}{Optional seed for CV cell sampling (reproducibility).}
 }

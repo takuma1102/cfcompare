@@ -11,17 +11,21 @@
 #'   shrunken singular values `d`.
 #' @keywords internal
 #' @noRd
-.svt <- function(X, tau) {
+.svt <- function(X, tau, method = c("truncated", "full")) {
+  method <- match.arg(method)
   if (is.infinite(tau)) {
     return(list(L = matrix(0, nrow(X), ncol(X)), rank = 0L, d = numeric(0)))
   }
-  # Optional fast path: when the nuclear-norm rank is small, a truncated SVD
-  # (RSpectra) is much faster than a full svd() on a large matrix. It is used
-  # only if RSpectra is installed, the matrix is reasonably large, and the user
-  # has not disabled it via options(cfcompare.truncated_svd = FALSE). The full
-  # svd() below is always the fallback and the default when RSpectra is absent,
-  # so results are unchanged unless you opt in.
-  if (isTRUE(getOption("cfcompare.truncated_svd", TRUE)) &&
+  # Fast path (the default, `method = "truncated"`): when the nuclear-norm rank
+  # is small, a truncated SVD (RSpectra) computes only the leading singular
+  # triplets and is much faster than a full svd() on a large matrix. It is used
+  # only when RSpectra is installed and the matrix is large enough to benefit;
+  # on tiny matrices, when RSpectra is absent, or when `method = "full"`, the
+  # exact full svd() below is used instead. The two give the same SVT to
+  # numerical tolerance, so the choice is a speed/exactness trade-off only.
+  # `method = "full"` forces the full SVD and is used for the numerical-agreement
+  # checks against the official Python package (see README).
+  if (identical(method, "truncated") &&
       min(dim(X)) > 50L &&
       requireNamespace("RSpectra", quietly = TRUE)) {
     res <- .svt_truncated(X, tau)
@@ -83,13 +87,20 @@
 #' @param lambda Nuclear-norm penalty (use `Inf` for no low-rank term).
 #' @param max_iter Maximum number of outer iterations.
 #' @param tol Relative Frobenius convergence tolerance on the fitted matrix.
-#' @param L_init Optional warm start for `L`.
+#' @param L_init Optional warm start for `L` (e.g. the low-rank part from a
+#'   previous solve on a similar problem); speeds up convergence without changing
+#'   the solution.
+#' @param svd_method Singular-value decomposition used inside the soft-impute
+#'   step: `"truncated"` (default; leading triplets via RSpectra when available
+#'   and worthwhile) or `"full"` (exact base R `svd()`).
 #' @return A list with the fitted matrix `M`, low-rank part `L`, fixed effects
 #'   `alpha`/`beta`/`grand`, estimated `rank`, iterations `iter`, and `lambda`.
 #' @keywords internal
 #' @noRd
 .mcnnm_fit <- function(Y, mask, w, lambda,
-                       max_iter = 200L, tol = 1e-5, L_init = NULL) {
+                       max_iter = 200L, tol = 1e-5, L_init = NULL,
+                       svd_method = c("truncated", "full")) {
+  svd_method <- match.arg(svd_method)
   N <- nrow(Y); Tt <- ncol(Y)
   ww <- mask * w
   Lip <- max(ww)
@@ -114,7 +125,7 @@
     a <- rowMeans(R) - g
     b <- colMeans(R) - g
     FEm <- g + outer(a, ones_T) + outer(ones_N, b)
-    sv <- .svt(Mc - FEm, thr)
+    sv <- .svt(Mc - FEm, thr, method = svd_method)
     L <- sv$L
     rnk <- sv$rank
     M <- FEm + L

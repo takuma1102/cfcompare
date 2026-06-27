@@ -14,7 +14,8 @@
 #' @noRd
 .oos_predict_native <- function(Y, fit_mask, wmat, lambda_nn, control) {
   fit <- .mcnnm_fit(Y, fit_mask, wmat, lambda_nn,
-                    max_iter = control$max_iter, tol = control$tol)
+                    max_iter = control$max_iter, tol = control$tol,
+                    svd_method = control$svd %||% "truncated")
   fit$M
 }
 
@@ -128,15 +129,16 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
   if (metric == "prediction") {
     # per-cell held-out prediction RMSE (native methods only)
     native_names <- intersect(c("DID", "MC", "TROP"), methods)
-    run_rmse <- matrix(NA_real_, n_runs, length(native_names),
-                       dimnames = list(NULL, native_names))
-    for (r in seq_len(n_runs)) {
-      if (verbose) message("RMSE run ", r, "/", n_runs)
-      pseudo <- sample(controls, n_pseudo)
+    # draw all pseudo-cohorts up front (reproducible given seed); the per-run
+    # work below is deterministic and runs in parallel when workers > 1.
+    pseudo_list <- lapply(seq_len(n_runs), function(r) sample(controls, n_pseudo))
+    par <- (control$workers %||% 1L) > 1L
+    one_run <- function(pseudo) {
       excl <- W; excl[pseudo, held_periods] <- 1
       fit_mask <- 1 - excl
       H <- cbind(rep(pseudo, each = length(held_periods)),
                  rep(held_periods, times = length(pseudo)))
+      out <- stats::setNames(rep(NA_real_, length(native_names)), native_names)
       for (meth in native_names) {
         lam <- native_cfg[[meth]]$lam
         wmat <- if (meth == "TROP")
@@ -144,9 +146,17 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
           matrix(1, N, Tt)
         Mhat <- .oos_predict_native(Y, fit_mask, wmat, lam$nn, control)
         err <- Y[H] - Mhat[H]
-        run_rmse[r, meth] <- sqrt(mean(err^2))
+        out[[meth]] <- sqrt(mean(err^2))
       }
+      out
     }
+    if (verbose) message("RMSE: ", n_runs, " prediction run(s)")
+    runs <- .with_workers(control$workers %||% 1L,
+                          .par_lapply(pseudo_list, one_run, parallel = par))
+    run_rmse <- do.call(rbind, runs)
+    if (is.null(dim(run_rmse)))
+      run_rmse <- matrix(run_rmse, nrow = n_runs,
+                         dimnames = list(NULL, native_names))
     for (meth in native_names) {
       v <- run_rmse[, meth]
       rows[[meth]] <- data.frame(method = meth, rmse = sqrt(mean(v^2)),
@@ -169,38 +179,51 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
     long_unit <- rep(ctrl_ids, times = Tt)
     long_time <- rep(tlabs, each = ncy)
     long_y <- as.numeric(Yc)
-    run_att <- matrix(NA_real_, n_runs, length(methods),
-                      dimnames = list(NULL, methods))
-    skip_notes <- stats::setNames(rep(NA_character_, length(methods)), methods)
-    for (r in seq_len(n_runs)) {
-      if (verbose) message("placebo run ", r, "/", n_runs)
-      ps <- sample(seq_len(ncy), n_pseudo)
+    # draw all placebo cohorts up front (reproducible given seed); each run is
+    # otherwise self-contained and runs in parallel when workers > 1.
+    ps_list <- lapply(seq_len(n_runs), function(r) sample(seq_len(ncy), n_pseudo))
+    par <- (control$workers %||% 1L) > 1L
+    one_run <- function(ps) {
       Wp <- matrix(0, ncy, Tt, dimnames = dimnames(Yc))
       Wp[ps, held_periods] <- 1
       patp <- .assignment_pattern(Wp)
       dcp <- data.frame(.u = long_unit, .t = long_time, .y = long_y,
                         .w = as.numeric(Wp), stringsAsFactors = FALSE)
       take <- function(e) if (inherits(e, "skip")) NA_real_ else e$estimate
+      att <- stats::setNames(rep(NA_real_, length(methods)), methods)
+      notes <- stats::setNames(rep(NA_character_, length(methods)), methods)
       for (meth in methods) {
         val <- tryCatch(switch(meth,
           DID  = .trop_att(Yc, Wp, native_cfg$DID$lam,  control, "pooled", patp)$att,
           MC   = .trop_att(Yc, Wp, native_cfg$MC$lam,   control, "pooled", patp)$att,
           TROP = .trop_att(Yc, Wp, native_cfg$TROP$lam, control, "pooled", patp)$att,
           SDID = { e <- .engine_synthdid(Yc, Wp, patp, "sdid", cl, se = "none")
-                   if (inherits(e, "skip")) skip_notes[[meth]] <- e$note; take(e) },
+                   if (inherits(e, "skip")) notes[[meth]] <- e$note; take(e) },
           SC   = { e <- .engine_synthdid(Yc, Wp, patp, "sc", cl, se = "none")
-                   if (inherits(e, "skip")) skip_notes[[meth]] <- e$note; take(e) },
+                   if (inherits(e, "skip")) notes[[meth]] <- e$note; take(e) },
           gsynth   = { e <- .engine_gsynth(dcp, ".y", ".w", ".u", ".t", "mc", cl)
-                   if (inherits(e, "skip")) skip_notes[[meth]] <- e$note; take(e) },
+                   if (inherits(e, "skip")) notes[[meth]] <- e$note; take(e) },
           augsynth = { e <- .engine_augsynth(dcp, ".y", ".w", ".u", ".t", patp, cl)
-                   if (inherits(e, "skip")) skip_notes[[meth]] <- e$note; take(e) },
+                   if (inherits(e, "skip")) notes[[meth]] <- e$note; take(e) },
           CS   = { e <- .engine_did_cs(dcp, ".y", ".w", ".u", ".t", patp, cl)
-                   if (inherits(e, "skip")) skip_notes[[meth]] <- e$note; take(e) },
+                   if (inherits(e, "skip")) notes[[meth]] <- e$note; take(e) },
           DIFP = .difp_att(Yc, Wp, patp)
         ), error = function(err) NA_real_)
-        run_att[r, meth] <- val
+        att[[meth]] <- val
       }
+      list(att = att, notes = notes)
     }
+    if (verbose) message("placebo: ", n_runs, " run(s)")
+    runs <- .with_workers(control$workers %||% 1L,
+                          .par_lapply(ps_list, one_run, parallel = par))
+    run_att <- do.call(rbind, lapply(runs, `[[`, "att"))
+    if (is.null(dim(run_att)))
+      run_att <- matrix(run_att, nrow = n_runs, dimnames = list(NULL, methods))
+    note_mat <- do.call(rbind, lapply(runs, `[[`, "notes"))
+    skip_notes <- vapply(methods, function(meth) {
+      v <- note_mat[, meth]; v <- v[!is.na(v)]
+      if (length(v)) v[1] else NA_character_
+    }, character(1))
     for (meth in methods) {
       a <- run_att[, meth]; a <- a[is.finite(a)]
       if (length(a) >= 1) {
