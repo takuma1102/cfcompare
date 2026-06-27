@@ -7,24 +7,23 @@
 <!-- badges: end -->
 
 > **Note**: `cfcompare` is an independent R package
-> and not endorsed or maintained by the authors of the TROP estimator (Athey, Imbens, Qu &
+> and not endorsed or maintained by the authors of the TROP article (Athey, Imbens, Qu &
 > Viviano, 2026). TROP software written by the authors
 > includes their Python package
 > [`trop`](https://pypi.org/project/trop/)
 > ([ostasovskyi/TROP-Estimator](https://github.com/ostasovskyi/TROP-Estimator))
-> and Stata package
-> ([justinwaddy/TROP](https://github.com/justinwaddy/TROP)). Please cite the paper (see
+> and Stata command
+> ([justinwaddy/TROP](https://github.com/justinwaddy/TROP)). Please cite their paper (see
 > [Citation](#citation)) when using this software.
 
 `cfcompare` is a R package that implements TROP and
-places it in a common comparison workflow with other ATT estimators, such as difference-in-differences (DID),
-synthetic difference-in-differences (SDID), synthetic control (SC), matrix
-completion (MC), `gsynth`, `augsynth`, and DIFP (Doudchenko–Imbens–Ferman–Pinto)
-on the same tidy schema and shared plots, so that applied researchers can run them on the same data and compare. The TROP, DID,
+places it in a common comparison workflow with other ATT estimators, such as DID/TWFE,
+synthetic DID (SDID), synthetic control (SC), matrix
+completion (MC), `gsynth`, `augsynth`, and DIFP (Doudchenko–Imbens–Ferman–Pinto),
+on the same tidy schema and shared plots, so that applied researchers can easily compare them. The TROP, DID,
 MC and DIFP engines are written natively in base R from the equations in the
 paper (Athey, Imbens, Qu & Viviano, 2026,
-[doi:10.1002/jae.70061](https://doi.org/10.1002/jae.70061); working paper
-[arXiv:2508.21536](https://arxiv.org/abs/2508.21536)); the others wrap existing R
+[doi:10.1002/jae.70061](https://doi.org/10.1002/jae.70061)); the others wrap existing R
 packages. Existing official TROP software includes the Python package `trop` and
 a Stata implementation ([justinwaddy/TROP](https://github.com/justinwaddy/TROP));
 `cfcompare` is not affiliated with or
@@ -60,11 +59,10 @@ comparison always runs. Optional engines whose package is missing — or that do
 not apply to the design — are skipped with a message, and the remaining methods
 still produce output.
 
-By default `panel_compare()` runs `DID`, `SDID`, `MC` and `TROP`. **DIFP** and
-**CS** are available but opt-in: add them via `methods = `. CS (Callaway &
-Sant'Anna) in particular is *not* part of the TROP paper's comparison set and
-requires an absorbing (staggered/block) treatment, so it is offered as an
-option rather than a default.
+By default, `panel_compare()` runs `DID`, `SDID`, `MC`, `TROP`, and `DIFP`.
+`CS` (Callaway &
+Sant'Anna) is available as an opt-in: add them via `methods = `. Take note that `CS` is not part of the original TROP paper's comparison set and
+requires an absorbing (staggered/block) treatment.
 
 ## Why TROP
 
