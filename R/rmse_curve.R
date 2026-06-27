@@ -159,6 +159,11 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
                        anchor = "pooled", control = trop_control(),
                        seed = 1L, parallel = FALSE, verbose = FALSE) {
   vary <- match.arg(vary)
+  # rmse_curve() seeds each Monte Carlo replication internally (via
+  # .rmse_curve_gen) so its results are reproducible; save and restore the
+  # caller's RNG state so the function leaves the global stream untouched.
+  old_seed <- .Random.seed_safe()
+  on.exit(.Random.seed_restore(old_seed), add = TRUE)
   methods <- .resolve_methods(
     methods, exclude,
     c("DID", "SDID", "SC", "MC", "DIFP", "TROP", "gsynth", "augsynth", "CS"))

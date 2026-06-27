@@ -23,7 +23,7 @@ Point estimate and (where available) confidence interval for each method,
 on a single axis -- the quick visual comparison this package is built for.
 }
 \examples{
-\dontrun{
+\donttest{
 df <- sim_panel(seed = 1)
 cmp <- panel_compare(df, "y", "w", "id", "t",
                      methods = c("DID", "MC", "TROP"))

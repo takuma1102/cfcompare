@@ -24,7 +24,10 @@
 #' @export
 sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
                       rank = 3L, att = 1, noise = 0.5, seed = NULL) {
-  if (!is.null(seed)) set.seed(seed)
+  if (!is.null(seed)) {
+    old <- .Random.seed_safe(); on.exit(.Random.seed_restore(old), add = TRUE)
+    set.seed(seed)
+  }
   if (is.null(t0)) t0 <- floor(0.75 * T) + 1L
   stopifnot(n_treated < N, t0 >= 2, t0 <= T)
 
@@ -101,7 +104,10 @@ sim_semisynthetic <- function(data, outcome, unit, time,
                               baseline = c("observed", "lowrank"),
                               lambda_nn = NULL, noise = 0, seed = NULL) {
   baseline <- match.arg(baseline)
-  if (!is.null(seed)) set.seed(seed)
+  if (!is.null(seed)) {
+    old <- .Random.seed_safe(); on.exit(.Random.seed_restore(old), add = TRUE)
+    set.seed(seed)
+  }
   units <- sort(unique(data[[unit]]))
   times <- sort(unique(data[[time]]))
   N <- length(units); Tt <- length(times)

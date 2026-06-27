@@ -20,7 +20,7 @@
 #' @param ... Unused.
 #' @return A \pkg{ggplot2} object.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' df <- sim_panel(seed = 1)
 #' cmp <- panel_compare(df, "y", "w", "id", "t",
 #'                      methods = c("DID", "MC", "TROP"))
