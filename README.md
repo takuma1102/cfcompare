@@ -157,7 +157,7 @@ and otherwise skipped with a note. The procedure refits per placebo run, so cap
 ## Running a single estimator
 
 ```r
-fit <- trop(df, "y", "w", "id", "t", se = "jackknife")
+fit <- trop(df, "y", "w", "id", "t")   # bootstrap SEs by default
 fit
 fit$tau_cells        # per treated-cell effects
 fit$counterfactual   # estimated Y(0) matrix
@@ -213,7 +213,8 @@ skipped otherwise.
 
 ## Inference
 
-Native engines support three variance estimators, selected with `se=`:
+Native engines support three variance estimators, selected with `se=`
+(`trop()` defaults to `"bootstrap"`):
 
 - **`"bootstrap"`** — a unit-level *stratified block* bootstrap (resample treated
   and control units separately, with replacement, keeping each unit's full time
@@ -249,8 +250,9 @@ panel_compare(ss, "y", "w", "id", "t")  # which estimator recovers it?
 ## Visualising a single fit
 
 `autoplot()` on a `trop` fit gives a synthetic-control-style trajectory plot: the
-treated-unit average against the estimated `Y(0)`, the post-treatment gap (the
-effect) shaded, and the TROP time weights `theta_s = exp(-lambda_time * |t - s|)`
+treated-unit average against the estimated `Y(0)`, a dotted line marking the first
+treated period (the post-treatment gap between the two lines is the effect, left
+unshaded so it is not mistaken for a confidence band), and the TROP time weights
 drawn as a filled band along the bottom (in the style of `synthdid`'s time-weight
 strip). The band shows *time weights* — how much each period is leaned on — not
 observation counts; with `lambda_time = 0` the weights are uniform and the band is
@@ -258,6 +260,28 @@ flat. Pass `show_weights = FALSE` to hide it.
 
 ```r
 autoplot(trop(df, "y", "w", "id", "t"))
+```
+
+## Event study (per-period effects)
+
+`trop_event_study()` decomposes a fitted ATT into per-period effects indexed by
+event time (periods relative to each unit's first treated period). It reuses the
+same resampling as the overall standard error — each resample's per-cell effects
+are aggregated *by event time* rather than into one mean — so no extra modelling
+assumptions are introduced. With `pre_periods = TRUE` (the default) the
+pre-treatment gaps are returned as placebo / pre-trend points; a flat, near-zero
+pre-period profile supports the design. `autoplot()` draws the familiar
+event-study figure: per-period points with pointwise CI bars, pre-treatment
+points shown distinctly, a dotted line at treatment onset, and a dashed line at
+zero. Because the treated composition varies across bootstrap resamples and each
+event time leans on relatively few cells, the per-period intervals are wider than
+the overall ATT interval and are pointwise (not simultaneous).
+
+```r
+fit <- trop(df, "y", "w", "id", "t")
+es  <- trop_event_study(fit, se = "bootstrap")   # bootstrap is the default
+es                                               # per-period table
+autoplot(es)
 ```
 
 ## Penalty sensitivity (heatmap)

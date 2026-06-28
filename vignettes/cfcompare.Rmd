@@ -124,16 +124,37 @@ fit$lambda
 ```
 
 Calling `autoplot()` on a single `trop` fit gives a synthetic-control-style
-trajectory: the treated-unit average against the estimated `Y(0)`, with the
-post-treatment gap (the effect) shaded. Because TROP carries explicit time
-weights, the weights `theta_s = exp(-lambda_time * |t - s|)` are drawn as a
-filled band along the bottom, in the style of `synthdid`'s time-weight strip.
-The band shows *time weights* — how much each period the counterfactual leans on
-— not observation counts; it is flat when `lambda_time = 0` (uniform weighting).
-Use `show_weights = FALSE` to drop the band.
+trajectory: the treated-unit average against the estimated `Y(0)`, with a dotted
+line marking the first treated period (the post-treatment gap between the two
+lines is the effect, left unshaded so it is not mistaken for a confidence band).
+Because TROP carries explicit time weights, those weights are drawn as a filled
+band along the bottom, in the style of `synthdid`'s time-weight strip. The band
+shows *time weights* — how much each period the counterfactual leans on — not
+observation counts; it is flat when `lambda_time = 0` (uniform weighting). Use
+`show_weights = FALSE` to drop the band.
 
 ```{r trop-autoplot, fig.width = 6, fig.height = 4.5, fig.alt = "TROP trajectory: observed vs. estimated Y(0) with the time-weight band along the bottom"}
 autoplot(fit)
+```
+
+### Per-period effects (event study)
+
+`trop_event_study()` breaks the single ATT into per-period effects indexed by
+event time (periods relative to each unit's first treated period). It reuses the
+fit's resampling — aggregating each resample's per-cell effects *by event time*
+rather than into one mean — so it adds no modelling assumptions beyond those of
+the fit itself. With `pre_periods = TRUE` (the default) the pre-treatment gaps
+come back as placebo / pre-trend points, and `autoplot()` draws the event-study
+figure: per-period points with pointwise confidence bars, pre-treatment points
+shown distinctly, a dotted line at treatment onset, and a dashed line at zero. A
+flat pre-period profile and a clear post-treatment jump are the visual signature
+of a credible design. The per-period intervals are wider than the overall ATT
+interval and are pointwise rather than simultaneous.
+
+```{r trop-event, fig.width = 6, fig.height = 4.5, fig.alt = "TROP event study: per-period ATT against event time with pointwise confidence bars and pre-treatment placebo points"}
+es <- trop_event_study(fit, se = "bootstrap")   # bootstrap is the default
+es
+autoplot(es)
 ```
 
 ### Recovering special cases
@@ -177,11 +198,17 @@ The native engines (DID, MC, TROP) accept **block**, **staggered**, and
 active treatment in each cell. `SDID` and `SC` are defined for block designs only
 and are skipped, with a note, on other designs.
 
-Standard errors from the native engines are **jackknife**
-(leave-one-treated-unit-out) when there are at least two treated units, and
-**placebo** when there is a single treated unit. These are practical
-approximations; see Section 6 of the paper for the estimator's formal inference
-theory.
+By default the native engines report a **bootstrap** standard error: a
+unit-level stratified block bootstrap (resampling treated and control units
+separately, with replacement, keeping each unit's full time series), the
+approach used for TROP's standard errors and confidence intervals in the paper.
+Percentile intervals are the default; tune the bootstrap with
+`trop_control(n_boot =, boot_ci =)`. Two alternatives are available via `se =`:
+**jackknife** (leave-one-treated-unit-out; needs at least two treated units) and
+**placebo** (assign the treated pattern to controls; for a single treated unit).
+`se = "auto"` picks jackknife when there are at least two treated units and
+placebo otherwise. These are practical approximations; see Section 6 of the
+paper for the estimator's formal inference theory.
 
 ## Performance
 

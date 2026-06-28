@@ -289,12 +289,12 @@ autoplot.cf_rmse_tbl <- function(object, ...) {
   if (identical(metric, "prediction")) {
     rmse_lab  <- "Out-of-sample prediction RMSE"
     title_lab <- "Out-of-sample Prediction RMSE by Method"
-    sub_lab   <- sprintf("horizon = %s periods, %s runs",
+    sub_lab   <- sprintf("Horizon = %s periods, %s runs",
                          attr(object, "horizon"), df$n_runs[1])
   } else {
     rmse_lab  <- "Placebo RMSE"
     title_lab <- "Placebo RMSE by Method"
-    sub_lab   <- sprintf("horizon = %s periods, %s placebo runs",
+    sub_lab   <- sprintf("Horizon = %s periods, %s placebo runs",
                          attr(object, "horizon"), df$n_runs[1])
   }
   ggplot2::ggplot(df, ggplot2::aes(x = .data$method, y = .data$rmse,

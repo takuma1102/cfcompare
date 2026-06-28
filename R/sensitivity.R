@@ -200,7 +200,7 @@ autoplot.cf_trop_grid <- function(object, ...) {
   fv <- d[[fcol]][1L]
   fv_txt <- if (is.infinite(fv)) "Inf" else sprintf("%.3g", fv)
   sub_txt <- substitute(
-    "fixed " * FS == v * ";  cell values = ATT; red outline = CV-selected",
+    "Fixed " * FS == v * ";  cell values = ATT; red outline = CV-selected",
     list(FS = .lambda_sym(fixed_pen), v = fv_txt))
 
   ggplot2::ggplot(d, ggplot2::aes(x = .data$xf, y = .data$yf,
@@ -276,13 +276,29 @@ plot_trop_surfaces <- function(grid, which = c("both", "cv_loss", "att"),
   cv_surface[ix]  <- grid$cv_loss
   att_surface[ix] <- grid$att
 
+  # penalty held fixed across the 2-D sweep, shown as a centred subtitle (only
+  # two of the three lambdas vary within a single surface).
+  fixed_pen <- .grid_fixed(grid)
+  fcol <- paste0("lambda_", fixed_pen)
+  fv <- grid[[fcol]][1L]
+  fv_txt <- if (is.infinite(fv)) "Inf" else sprintf("%.3g", fv)
+  sub_expr <- substitute("Fixed " * FS == v,
+                         list(FS = .lambda_sym(fixed_pen), v = fv_txt))
+
   viridis <- function(n) grDevices::hcl.colors(n, "Viridis", rev = TRUE)
   bluered <- function(n) grDevices::hcl.colors(n, "Blue-Red")
   draw <- function(z, main, key, pal) {
     graphics::filled.contour(xv, yv, t(z), color.palette = pal,
-      xlab = .lambda_lab(x_pen), ylab = .lambda_lab(y_pen),
-      main = main,
-      key.title = graphics::title(main = key, cex.main = 0.9, font.main = 1),
+      plot.title = {
+        # Supplying plot.title overrides filled.contour's default title() call,
+        # so the main title and axis labels are re-drawn here together with a
+        # centred subtitle naming the penalty that is held fixed.
+        graphics::title(main = main, line = 1.6,
+                        xlab = .lambda_lab(x_pen), ylab = .lambda_lab(y_pen))
+        graphics::mtext(sub_expr, side = 3, line = 0.4, adj = 0.5, cex = 0.85)
+      },
+      key.title = graphics::title(main = key, cex.main = 0.8,
+                                  font.main = 2, line = 0.5),
       ...)
   }
 

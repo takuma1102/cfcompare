@@ -202,9 +202,11 @@
 #'   (faithful to the paper); `"pooled"` solves once with weights anchored to the
 #'   treated set (fast); `"auto"` (default) uses `per_cell` when there are at
 #'   most `max_cells` treated cells and `pooled` otherwise.
-#' @param se Standard-error method: `"auto"`, `"jackknife"` (leave-one-treated-
-#'   unit-out; needs >= 2 treated units), `"placebo"` (assign the treated
-#'   pattern to controls; for a single treated unit), or `"none"`.
+#' @param se Standard-error method: `"bootstrap"` (default; unit-level
+#'   stratified block bootstrap), `"jackknife"` (leave-one-treated-unit-out;
+#'   needs at least 2 treated units), `"placebo"` (assign the treated pattern to
+#'   controls; for a single treated unit), `"auto"` (jackknife when there are at
+#'   least 2 treated units, else placebo), or `"none"`.
 #' @param grids Optional list of penalty grids; see [trop_control()].
 #' @param control A list of solver/CV settings from [trop_control()].
 #' @param verbose Logical; print CV progress.
@@ -223,7 +225,7 @@
 trop <- function(data, outcome, treatment, unit, time,
                  lambda = NULL,
                  anchor = c("auto", "per_cell", "pooled"),
-                 se = c("auto", "jackknife", "bootstrap", "placebo", "none"),
+                 se = c("bootstrap", "auto", "jackknife", "placebo", "none"),
                  grids = NULL,
                  control = trop_control(),
                  verbose = FALSE) {
@@ -512,5 +514,259 @@ print.trop <- function(x, ...) {
               x$rank, x$anchor, x$pattern$type))
   cat(sprintf("  treated cells=%d across %d unit(s)\n",
               x$pattern$n_treated_cells, x$pattern$n_treated_units))
+  invisible(x)
+}
+
+# ---- per-period event study -------------------------------------------------
+
+#' Pooled TROP counterfactual matrix (all cells).
+#'
+#' The per-cell anchor leaves the counterfactual undefined off the treated
+#' cells, but the event study needs fitted values for the pre-treatment periods
+#' too. This solves eq. (2) once with weights anchored to the whole treated set,
+#' exactly as [autoplot.trop()] does for its trajectory plot, and returns the
+#' full N x T fitted matrix.
+#' @keywords internal
+#' @noRd
+.trop_pooled_M <- function(Y, W, lam, ctrl, pat) {
+  tu <- pat$treated_units
+  du <- .unit_distance_pooled(Y, W, tu)
+  t_anchor <- sort(unique(which(W == 1, arr.ind = TRUE)[, 2]))
+  wmat <- .trop_weight_matrix(du, t_anchor, ncol(Y), lam)
+  .trop_solve(Y, W, wmat, lam, ctrl)$M
+}
+
+#' Average treatment effect by event time (period relative to treatment).
+#'
+#' Event time is the column-index difference t - t0_i, where t0_i is the first
+#' treated period of unit i; this handles irregular spacing and staggered
+#' adoption naturally. Returns the mean gap Y - Mhat and the contributing cell
+#' count for each event time. With `pre_periods = FALSE` only event times >= 0
+#' are kept (otherwise the pre-treatment gaps become placebo / pre-trend
+#' points). A pooled `M` may be supplied to avoid re-solving.
+#' @keywords internal
+#' @noRd
+.trop_period_effects <- function(Y, W, lam, ctrl, pat, pre_periods = TRUE,
+                                 M = NULL) {
+  tu <- pat$treated_units
+  if (length(tu) < 1) return(list(effect = numeric(0), n = integer(0)))
+  Tt <- ncol(Y)
+  if (is.null(M)) M <- .trop_pooled_M(Y, W, lam, ctrl, pat)
+  gap <- Y - M
+  t0 <- vapply(tu, function(i) {
+    w <- which(W[i, ] == 1); if (length(w)) min(w) else NA_integer_
+  }, integer(1))
+  ok <- is.finite(t0); tu <- tu[ok]; t0 <- t0[ok]
+  if (!length(tu)) return(list(effect = numeric(0), n = integer(0)))
+  E <- outer(t0, seq_len(Tt), function(a, b) b - a)
+  G <- gap[tu, , drop = FALSE]
+  keep <- is.finite(G) & is.finite(E)
+  if (!pre_periods) keep <- keep & (E >= 0L)
+  if (!any(keep)) return(list(effect = numeric(0), n = integer(0)))
+  eff <- tapply(G[keep], E[keep], mean)
+  cnt <- tapply(G[keep], E[keep], length)
+  list(effect = stats::setNames(as.numeric(eff), names(eff)),
+       n = stats::setNames(as.integer(cnt), names(cnt)))
+}
+
+#' Per-event-time standard errors (jackknife / bootstrap / placebo).
+#'
+#' Mirrors `.trop_se()` but, instead of collapsing each resample to a single
+#' ATT, records the vector of period effects and aggregates it by event time.
+#' The expensive per-resample refit is identical; only the aggregation differs.
+#' Intervals are pointwise.
+#' @keywords internal
+#' @noRd
+.trop_event_se <- function(Y, W, lam, ctrl, pat, point, method, conf_level,
+                           pre_periods) {
+  ev <- names(point)
+  z <- stats::qnorm(1 - (1 - conf_level) / 2)
+  na_vec <- function() stats::setNames(rep(NA_real_, length(ev)), ev)
+  empty <- function() list(se = na_vec(), conf.low = na_vec(),
+                           conf.high = na_vec(), n_boot = NULL)
+  if (method == "none") return(empty())
+  par <- (ctrl$workers %||% 1L) > 1L
+  to_row <- function(v) { r <- v[ev]; names(r) <- ev; r }
+  col_sd <- function(M) apply(M, 2, function(x) {
+    x <- x[is.finite(x)]; if (length(x) < 2) NA_real_ else stats::sd(x)
+  })
+
+  if (method == "jackknife") {
+    tu <- pat$treated_units; G <- length(tu)
+    if (G < 2) return(empty())
+    reps <- .par_lapply(seq_len(G), function(g) {
+      keep <- setdiff(seq_len(nrow(Y)), tu[g])
+      Yk <- Y[keep, , drop = FALSE]; Wk <- W[keep, , drop = FALSE]
+      patk <- .assignment_pattern(Wk)
+      to_row(.trop_period_effects(Yk, Wk, lam, ctrl, patk, pre_periods)$effect)
+    }, parallel = par)
+    M <- do.call(rbind, reps)
+    v <- vapply(seq_len(ncol(M)), function(j) {
+      x <- M[, j]; x <- x[is.finite(x)]; g <- length(x)
+      if (g < 2) NA_real_ else (g - 1) / g * sum((x - mean(x))^2)
+    }, numeric(1))
+    se <- sqrt(v)
+    return(list(se = stats::setNames(se, ev),
+                conf.low = stats::setNames(point - z * se, ev),
+                conf.high = stats::setNames(point + z * se, ev),
+                n_boot = NULL))
+  }
+
+  if (method == "bootstrap") {
+    tu <- pat$treated_units; co <- setdiff(seq_len(nrow(Y)), tu)
+    if (length(tu) < 1 || length(co) < 2) return(empty())
+    B <- ctrl$n_boot %||% 200L
+    if (!is.null(ctrl$seed)) {
+      old <- .Random.seed_safe(); on.exit(.Random.seed_restore(old), add = TRUE)
+      set.seed(ctrl$seed)
+    }
+    idx_list <- lapply(seq_len(B), function(b)
+      c(sample(tu, length(tu), replace = TRUE),
+        sample(co, length(co), replace = TRUE)))
+    one <- function(idx) {
+      Yb <- Y[idx, , drop = FALSE]; Wb <- W[idx, , drop = FALSE]
+      rownames(Yb) <- rownames(Wb) <- as.character(seq_along(idx))
+      patb <- .assignment_pattern(Wb)
+      if (patb$n_treated_units < 1 || length(setdiff(seq_len(nrow(Yb)),
+          patb$treated_units)) < 1) return(na_vec())
+      tryCatch(
+        to_row(.trop_period_effects(Yb, Wb, lam, ctrl, patb, pre_periods)$effect),
+        error = function(e) na_vec())
+    }
+    reps <- .par_lapply(idx_list, one, parallel = par)
+    M <- do.call(rbind, reps)
+    nfin <- colSums(is.finite(M)); se <- col_sd(M)
+    if (identical(ctrl$boot_ci %||% "percentile", "percentile")) {
+      qs <- vapply(seq_len(ncol(M)), function(j) {
+        x <- M[, j]; x <- x[is.finite(x)]
+        if (length(x) < 2) c(NA_real_, NA_real_)
+        else stats::quantile(x, c((1 - conf_level) / 2, 1 - (1 - conf_level) / 2),
+                             names = FALSE, type = 7)
+      }, numeric(2))
+      lo <- qs[1, ]; hi <- qs[2, ]
+    } else { lo <- point - z * se; hi <- point + z * se }
+    return(list(se = stats::setNames(se, ev),
+                conf.low = stats::setNames(lo, ev),
+                conf.high = stats::setNames(hi, ev),
+                n_boot = max(nfin)))
+  }
+
+  # placebo
+  controls <- setdiff(seq_len(nrow(Y)), pat$treated_units)
+  if (length(controls) < 2) return(empty())
+  tcols <- which(colSums(W[pat$treated_units, , drop = FALSE]) > 0)
+  reps <- .par_lapply(seq_along(controls), function(k) {
+    ci <- controls[k]
+    Wp <- matrix(0, nrow(Y), ncol(Y), dimnames = dimnames(Y))
+    Wp[ci, tcols] <- 1
+    patp <- .assignment_pattern(Wp)
+    to_row(.trop_period_effects(Y, Wp, lam, ctrl, patp, pre_periods)$effect)
+  }, parallel = par)
+  M <- do.call(rbind, reps); se <- col_sd(M)
+  list(se = stats::setNames(se, ev),
+       conf.low = stats::setNames(point - z * se, ev),
+       conf.high = stats::setNames(point + z * se, ev), n_boot = NULL)
+}
+
+#' Per-period (event-study) effects from a TROP fit
+#'
+#' Decomposes a fitted [trop()] ATT into per-period treatment effects indexed by
+#' event time (periods relative to each unit's first treated period) and attaches
+#' pointwise standard errors and confidence intervals. The same resampling used
+#' for the overall SE is reused: each resample's per-cell effects are aggregated
+#' by event time rather than into a single mean, so no extra modelling
+#' assumptions are introduced. With `pre_periods = TRUE` the pre-treatment gaps
+#' are returned as placebo / pre-trend points (a flat, near-zero pre-period
+#' profile supports the design).
+#'
+#' Because the treated composition varies across bootstrap resamples and each
+#' event time draws on relatively few cells, the per-period intervals are wider
+#' than the overall ATT interval and cover each point individually (they are not
+#' simultaneous bands).
+#'
+#' @param object A `trop` fit from [trop()].
+#' @param se Standard-error method for the per-period effects: `"bootstrap"`
+#'   (default; unit-level stratified block bootstrap), `"jackknife"`
+#'   (leave-one-treated-unit-out; needs at least 2 treated units), `"placebo"` (assign
+#'   the treated pattern to controls), or `"none"`.
+#' @param pre_periods Logical; include pre-treatment event times as placebo /
+#'   pre-trend points (default `TRUE`).
+#' @param control A list of solver/CV/bootstrap settings from [trop_control()];
+#'   defaults to `trop_control()`. Use it to set `n_boot`, `boot_ci`, `seed`, and
+#'   `workers` for the resampling.
+#' @param ... Unused.
+#' @return An object of class `trop_event_study`: a list whose `estimates` is a
+#'   `data.frame` with one row per event time (`event_time`, `estimate`,
+#'   `std.error`, `conf.low`, `conf.high`, `n_cells`, `period`), plus the overall
+#'   `att`, the `se.method`, and metadata.
+#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
+#'   Triply Robust Panel Estimators. arXiv:2508.21536.
+#' @seealso [autoplot.trop_event_study()] to plot the result.
+#' @examples
+#' \donttest{
+#' df  <- sim_panel(N = 24, T = 12, n_treated = 6, t0 = 8, att = 3, seed = 1)
+#' fit <- trop(df, "y", "w", "id", "t",
+#'             control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#' es  <- trop_event_study(fit, se = "bootstrap", pre_periods = TRUE,
+#'                         control = trop_control(n_boot = 100L, seed = 1))
+#' es
+#' }
+#' @export
+trop_event_study <- function(object,
+                             se = c("bootstrap", "jackknife", "placebo", "none"),
+                             pre_periods = TRUE, control = NULL, ...) {
+  stopifnot(inherits(object, "trop"))
+  se <- match.arg(se)
+  cl <- match.call()
+  if (is.null(control)) control <- trop_control()
+  conf_level <- object$conf.level %||% control$conf_level
+  Y <- object$panel$Y; W <- object$panel$W
+  pat <- object$pattern; lam <- object$lambda
+  if (pat$n_treated_units < 1) stop("No treated units.", call. = FALSE)
+
+  .with_workers(control$workers %||% 1L, {
+    M <- .trop_pooled_M(Y, W, lam, control, pat)
+    pe <- .trop_period_effects(Y, W, lam, control, pat, pre_periods, M = M)
+    point <- pe$effect
+    if (!length(point)) stop("No event-time cells.", call. = FALSE)
+    evt <- as.integer(names(point)); ord <- order(evt)
+    point <- point[ord]; evt <- evt[ord]
+    inf <- .trop_event_se(Y, W, lam, control, pat, point, se, conf_level,
+                          pre_periods)
+    res <- data.frame(
+      event_time = evt,
+      estimate   = as.numeric(point),
+      std.error  = as.numeric(inf$se[as.character(evt)]),
+      conf.low   = as.numeric(inf$conf.low[as.character(evt)]),
+      conf.high  = as.numeric(inf$conf.high[as.character(evt)]),
+      n_cells    = as.integer(pe$n[as.character(evt)]),
+      period     = ifelse(evt < 0L, "pre", "post"),
+      stringsAsFactors = FALSE)
+    structure(
+      list(estimates = res, att = object$estimate, se.method = se,
+           n_boot = inf$n_boot, conf.level = conf_level,
+           pre_periods = pre_periods, lambda = lam, pattern = pat,
+           outcome = object$outcome, call = cl),
+      class = "trop_event_study")
+  })
+}
+
+#' @export
+print.trop_event_study <- function(x, digits = 4, ...) {
+  cat("TROP event study (per-period ATT)\n")
+  cat(sprintf("  overall ATT = %.4f\n", x$att))
+  est <- x$estimates
+  n_post <- sum(est$period == "post")
+  n_pre  <- sum(est$period == "pre")
+  cat(sprintf("  event times: %d post-treatment", n_post))
+  if (n_pre > 0) cat(sprintf(", %d pre-treatment (placebo)", n_pre))
+  cat("\n")
+  se_lab <- switch(x$se.method %||% "none",
+    bootstrap = if (!is.null(x$n_boot))
+                  sprintf("bootstrap (%d reps)", x$n_boot) else "bootstrap",
+    jackknife = "jackknife", placebo = "placebo", none = "none",
+    x$se.method)
+  cat(sprintf("  SE: %s; %.0f%% pointwise CI\n", se_lab, 100 * x$conf.level))
+  print(format(est, digits = digits), row.names = FALSE)
   invisible(x)
 }

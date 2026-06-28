@@ -163,8 +163,8 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
   obs <- colMeans(Y[tu, , drop = FALSE])
   cf  <- colMeans(M[tu, , drop = FALSE])
   dat <- rbind(
-    data.frame(time = times, value = obs, series = "treated (observed)"),
-    data.frame(time = times, value = cf,  series = "estimated Y(0)"))
+    data.frame(time = times, value = obs, series = "Treated (observed)"),
+    data.frame(time = times, value = cf,  series = "Estimated Y(0)"))
 
   t0_time <- if (!is.na(pat$block_t0)) times[pat$block_t0] else NA
 
@@ -183,28 +183,24 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
     placebo   = "Placebo SE",
     none      = "no SE",
     sprintf("%s SE", object$se.method))
-  sub_txt <- substitute(lambda == lt %.% st, list(lt = lam_txt, st = se_txt))
+  sub_txt <- substitute("Penalties " * lambda == lt %.% st, list(lt = lam_txt, st = se_txt))
 
   p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data$time, y = .data$value,
                                          colour = .data$series)) +
     ggplot2::geom_line(linewidth = 0.9) +
     ggplot2::scale_colour_manual(
-      values = c("treated (observed)" = "#1b9e9e",
-                 "estimated Y(0)" = "#e8665a")) +
+      values = c("Treated (observed)" = "#1b9e9e",
+                 "Estimated Y(0)" = "#e8665a")) +
     ggplot2::labs(x = "Time", y = "Outcome",
                   colour = NULL,
                   title = "TROP: treated vs. estimated counterfactual",
                   subtitle = sub_txt)
 
   if (!is.na(t0_time)) {
-    # shade the post-treatment gap (the estimated effect)
-    post <- times >= t0_time
-    gap <- data.frame(time = times[post], ymin = pmin(obs, cf)[post],
-                      ymax = pmax(obs, cf)[post])
+    # mark the first treated period. The post-treatment gap between the two
+    # lines is the estimated effect; it is left unshaded so it is not mistaken
+    # for a confidence band.
     p <- p +
-      ggplot2::geom_ribbon(data = gap, inherit.aes = FALSE,
-        ggplot2::aes(x = .data$time, ymin = .data$ymin, ymax = .data$ymax),
-        fill = "grey50", alpha = 0.18) +
       ggplot2::geom_vline(xintercept = t0_time, linetype = "dotted",
                           colour = "grey50")
   }
@@ -231,7 +227,7 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
         ggplot2::aes(x = .data$time, y = .data$ymax),
         colour = "#1b9e9e", linewidth = 0.5) +
       ggplot2::geom_hline(yintercept = base, colour = "grey75", linewidth = 0.3) +
-      ggplot2::labs(caption = "bottom band: TROP time weights (theta_s)")
+      ggplot2::labs(caption = "Bottom band: TROP time weights")
   }
 
   p + ggplot2::theme_minimal(base_size = 12) +
@@ -242,5 +238,89 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
 #' @export
 plot.trop <- function(x, ...) {
   print(autoplot.trop(x, ...))
+  invisible(x)
+}
+
+#' Event-study plot for a TROP fit
+#'
+#' Plots the per-period treatment effects from [trop_event_study()] against event
+#' time, with pointwise confidence-interval bars, a dashed line at zero, and a
+#' dotted line marking treatment onset. When pre-treatment periods are present
+#' they are drawn as distinct placebo / pre-trend points (open markers) so the
+#' pre-period profile can be read at a glance. The SE method is named at the end
+#' of the subtitle.
+#'
+#' @param object A `trop_event_study` object from [trop_event_study()].
+#' @param ... Unused.
+#' @return A `ggplot` object.
+#' @export
+#' @examples
+#' \donttest{
+#' df  <- sim_panel(N = 24, T = 12, n_treated = 6, t0 = 8, att = 3, seed = 1)
+#' fit <- trop(df, "y", "w", "id", "t",
+#'             control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#' autoplot(trop_event_study(fit, se = "bootstrap",
+#'                           control = trop_control(n_boot = 100L, seed = 1)))
+#' }
+autoplot.trop_event_study <- function(object, ...) {
+  .need_ggplot()
+  est <- object$estimates
+  has_ci <- any(is.finite(est$conf.low) & is.finite(est$conf.high))
+  has_pre <- any(est$period == "pre")
+
+  se_txt <- switch(object$se.method %||% "none",
+    bootstrap = if (!is.null(object$n_boot))
+                  sprintf("Bootstrap SE (%d reps)", object$n_boot) else "Bootstrap SE",
+    jackknife = "Jackknife SE",
+    placebo   = "Placebo SE",
+    none      = "no SE",
+    sprintf("%s SE", object$se.method))
+  ci_txt <- sprintf("%.0f%% pointwise CI", 100 * object$conf.level)
+  sub_txt <- sprintf("Per-period ATT, %s; %s", ci_txt, se_txt)
+
+  est$Period <- factor(ifelse(est$period == "pre",
+                              "Pre-treatment (placebo)", "Post-treatment"),
+                       levels = c("Pre-treatment (placebo)", "Post-treatment"))
+
+  p <- ggplot2::ggplot(est, ggplot2::aes(x = .data$event_time,
+                                         y = .data$estimate)) +
+    ggplot2::geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
+    ggplot2::geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50")
+
+  if (has_ci) {
+    p <- p + ggplot2::geom_errorbar(
+      ggplot2::aes(ymin = .data$conf.low, ymax = .data$conf.high,
+                   colour = .data$Period),
+      width = 0.18, na.rm = TRUE)
+  }
+
+  p <- p +
+    ggplot2::geom_point(ggplot2::aes(colour = .data$Period,
+                                     shape = .data$Period), size = 2.4) +
+    ggplot2::scale_colour_manual(
+      values = c("Pre-treatment (placebo)" = "grey55",
+                 "Post-treatment" = "#1b9e9e"), drop = FALSE) +
+    ggplot2::scale_shape_manual(
+      values = c("Pre-treatment (placebo)" = 1, "Post-treatment" = 16),
+      drop = FALSE) +
+    ggplot2::scale_x_continuous(breaks = est$event_time) +
+    ggplot2::labs(
+      x = "Event time (periods relative to treatment)",
+      y = "ATT", colour = NULL, shape = NULL,
+      title = "TROP event study", subtitle = sub_txt) +
+    ggplot2::theme_minimal(base_size = 12) +
+    .center_titles()
+
+  if (has_pre) {
+    p <- p + ggplot2::theme(legend.position = "top")
+  } else {
+    p <- p + ggplot2::guides(colour = "none", shape = "none")
+  }
+  p
+}
+
+#' @export
+plot.trop_event_study <- function(x, ...) {
+  print(autoplot.trop_event_study(x, ...))
   invisible(x)
 }
