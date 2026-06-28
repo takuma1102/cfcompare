@@ -158,7 +158,7 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
   du <- .unit_distance_pooled(Y, W, tu)
   t_anchor <- sort(unique(which(W == 1, arr.ind = TRUE)[, 2]))
   wmat <- .trop_weight_matrix(du, t_anchor, Tt, lam)
-  M <- .trop_solve(Y, W, wmat, lam, trop_control())$M
+  M <- .trop_solve(Y, W, wmat, lam, trop_control(), X = object$panel$X)$M
 
   obs <- colMeans(Y[tu, , drop = FALSE])
   cf  <- colMeans(M[tu, , drop = FALSE])

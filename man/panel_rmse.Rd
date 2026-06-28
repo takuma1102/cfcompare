@@ -34,8 +34,9 @@ panel_rmse(
 (e.g. \code{exclude = "DIFP"}). Unknown names are ignored with a warning.}
 
 \item{metric}{\code{"placebo"} (placebo-ATT RMSE, all methods) or \code{"prediction"}
-(per-cell held-out RMSE, native methods \code{"DID"}/\code{"MC"}/\code{"TROP"} only; other
-methods, including \code{"DIFP"}, are ignored for this metric).}
+(per-cell held-out counterfactual RMSE for \code{"DID"}/\code{"MC"}/\code{"TROP"}/\code{"DIFP"},
+and \code{"SDID"}/\code{"SC"} when \pkg{synthdid} is installed; \code{"gsynth"},
+\code{"augsynth"} and \code{"CS"} are \code{NA} for this metric).}
 
 \item{horizon}{Number of final periods held out per placebo cohort.}
 
@@ -67,7 +68,13 @@ zero), every method is estimated on that control-only panel, and the score is
 (DID, MC, TROP) and wrapped (\code{SDID}/\code{SC} via \pkg{synthdid}, \code{gsynth},
 \code{augsynth}, \code{CS} = Callaway & Sant'Anna via \pkg{did}).
 \item \code{metric = "prediction"}: per-cell one-step-ahead held-out RMSE (the paper's
-Table-31 style). Implemented for the native methods (DID, MC, TROP) only.
+Table-1 unit-period counterfactual prediction error). A block of control
+cells is held out and each method predicts the untreated outcome there via
+its counterfactual matrix (\code{\link[=counterfactual_matrix]{counterfactual_matrix()}}). Supported for the
+native methods (\code{DID}, \code{MC}, \code{TROP}), for \code{DIFP}, and -- when \pkg{synthdid}
+is installed -- for \code{SDID} and \code{SC}. The remaining wrapped methods
+(\code{gsynth}, \code{augsynth}, \code{CS}) are reported as \code{NA} for this metric; use
+\code{metric = "placebo"} for them.
 }
 
 Lower is better. Native methods are tuned once on the real data (DID is

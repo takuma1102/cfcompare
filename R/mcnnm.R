@@ -67,6 +67,51 @@
   list(L = L, rank = r, d = d)
 }
 
+#' Two-way within transformation (double demeaning) of a complete matrix.
+#'
+#' Subtracts row means, column means, and adds back the grand mean. For a
+#' balanced (complete) matrix this is the exact residual maker for additive
+#' two-way fixed effects, used to partial the fixed effects out of the
+#' covariates (Frisch-Waugh-Lovell) in the covariate-augmented solver.
+#' @keywords internal
+#' @noRd
+.double_demean <- function(M) {
+  M - rowMeans(M) -
+    matrix(colMeans(M), nrow(M), ncol(M), byrow = TRUE) + mean(M)
+}
+
+#' Normalise the `covariates` argument to a list of N x T matrices.
+#'
+#' Accepts `NULL` (no covariates), a single N x T matrix, an N x T x K array, or
+#' a list of N x T matrices; validates the dimensions and that every covariate is
+#' fully observed.
+#' @keywords internal
+#' @noRd
+.as_cov_list <- function(X, N, Tt) {
+  if (is.null(X)) return(list())
+  if (is.list(X) && !is.data.frame(X)) {
+    Xl <- X
+  } else if (is.array(X) && length(dim(X)) == 3L) {
+    Xl <- lapply(seq_len(dim(X)[3L]), function(k) X[, , k])
+  } else if (is.matrix(X)) {
+    Xl <- list(X)
+  } else {
+    stop("`covariates` must be a matrix, an N x T x K array, or a list of ",
+         "matrices.", call. = FALSE)
+  }
+  for (k in seq_along(Xl)) {
+    Mk <- Xl[[k]]
+    if (!is.matrix(Mk) || nrow(Mk) != N || ncol(Mk) != Tt) {
+      stop("Each covariate must be an ", N, " x ", Tt, " matrix.", call. = FALSE)
+    }
+    if (anyNA(Mk)) {
+      stop("Covariates must be fully observed (no NA), including treated cells.",
+           call. = FALSE)
+    }
+  }
+  Xl
+}
+
 #' Weighted nuclear-norm matrix completion with two-way fixed effects
 #'
 #' Solves the TROP working-model program
@@ -81,25 +126,38 @@
 #' matrix-completion (MC) estimator. See Athey, Imbens, Qu & Viviano (2025),
 #' eq. (2).
 #'
+#' When `X` is supplied (a list of N x T covariate matrices, or an N x T x K
+#' array), the low-rank term is split additively as \eqn{L_{js} = X_{js}'\phi +
+#' R_{js}} (eq. of Section 6.2): the covariate-linear part is unpenalised and the
+#' nuclear norm is applied to the residual \eqn{R}. Within each soft-impute
+#' iteration the fixed effects and \eqn{\phi} are obtained jointly by least
+#' squares (the fixed effects are partialled out of the covariates via the
+#' two-way within transformation, Frisch-Waugh-Lovell), and the residual is
+#' soft-thresholded. With no covariates the computation is unchanged.
+#'
 #' @param Y N x T outcome matrix (may contain `NA`).
 #' @param mask N x T 0/1 matrix; 1 = cell is used in the loss.
 #' @param w N x T non-negative observation weights (only used where `mask == 1`).
 #' @param lambda Nuclear-norm penalty (use `Inf` for no low-rank term).
 #' @param max_iter Maximum number of outer iterations.
 #' @param tol Relative Frobenius convergence tolerance on the fitted matrix.
-#' @param L_init Optional warm start for `L` (e.g. the low-rank part from a
-#'   previous solve on a similar problem); speeds up convergence without changing
-#'   the solution.
+#' @param L_init Optional warm start for the low-rank part (the residual `R` when
+#'   covariates are present), e.g. from a previous solve on a similar problem;
+#'   speeds up convergence without changing the solution.
 #' @param svd_method Singular-value decomposition used inside the soft-impute
 #'   step: `"truncated"` (default; leading triplets via RSpectra when available
 #'   and worthwhile) or `"full"` (exact base R `svd()`).
-#' @return A list with the fitted matrix `M`, low-rank part `L`, fixed effects
-#'   `alpha`/`beta`/`grand`, estimated `rank`, iterations `iter`, and `lambda`.
+#' @param X Optional covariates: `NULL`, a single N x T matrix, an N x T x K
+#'   array, or a list of N x T matrices. Each must be fully observed.
+#' @return A list with the fitted matrix `M`, low-rank part `L` (the residual
+#'   `R` when covariates are present), fixed effects `alpha`/`beta`/`grand`,
+#'   covariate coefficients `phi` (length-K, empty if no covariates), estimated
+#'   `rank`, iterations `iter`, and `lambda`.
 #' @keywords internal
 #' @noRd
 .mcnnm_fit <- function(Y, mask, w, lambda,
                        max_iter = 200L, tol = 1e-5, L_init = NULL,
-                       svd_method = c("truncated", "full")) {
+                       svd_method = c("truncated", "full"), X = NULL) {
   svd_method <- match.arg(svd_method)
   N <- nrow(Y); Tt <- ncol(Y)
   ww <- mask * w
@@ -111,27 +169,52 @@
   ones_N <- rep(1, N)
   a <- numeric(N); b <- numeric(Tt); g <- 0
   L <- if (is.null(L_init)) matrix(0, N, Tt) else L_init
-  fe_mat <- function() g + outer(a, ones_T) + outer(ones_N, b)
-  M <- fe_mat() + L
   thr <- lambda / Lip
   rnk <- 0L
   it <- 0L
+
+  # ---- covariate preprocessing (Section 6.2: L = X phi + R) ----------------
+  Xlist <- .as_cov_list(X, N, Tt)
+  K <- length(Xlist)
+  phi <- numeric(K)
+  if (K > 0L) {
+    # raw covariate design (for forming X phi) and its two-way-within version
+    # (for estimating phi after partialling out the fixed effects). The within
+    # design is constant across iterations, so factor it once.
+    Xmat <- matrix(unlist(lapply(Xlist, as.numeric), use.names = FALSE),
+                   ncol = K)
+    Xdd  <- matrix(unlist(lapply(Xlist, function(M) as.numeric(.double_demean(M))),
+                          use.names = FALSE), ncol = K)
+    qrXdd <- qr(Xdd)
+  }
+  xphi_of <- function(phi) if (K > 0L) matrix(Xmat %*% phi, N, Tt) else 0
+
+  M <- g + outer(a, ones_T) + outer(ones_N, b) + xphi_of(phi) + L
   for (it in seq_len(max_iter)) {
     M_old <- M
     resid <- ww * (Yf - M)            # zero on excluded cells
     Mc <- M + resid / Lip
-    R <- Mc - L
-    g <- mean(R)
-    a <- rowMeans(R) - g
-    b <- colMeans(R) - g
+    P <- Mc - L                       # target for fixed effects + X phi
+    if (K > 0L) {
+      phi <- qr.coef(qrXdd, as.numeric(.double_demean(P)))
+      phi[is.na(phi)] <- 0            # covariates collinear with the FE drop out
+      Xphi <- matrix(Xmat %*% phi, N, Tt)
+    } else {
+      Xphi <- 0
+    }
+    R0 <- P - Xphi
+    g <- mean(R0)
+    a <- rowMeans(R0) - g
+    b <- colMeans(R0) - g
     FEm <- g + outer(a, ones_T) + outer(ones_N, b)
-    sv <- .svt(Mc - FEm, thr, method = svd_method)
+    structured <- FEm + Xphi
+    sv <- .svt(Mc - structured, thr, method = svd_method)
     L <- sv$L
     rnk <- sv$rank
-    M <- FEm + L
+    M <- structured + L
     denom <- sqrt(sum(M_old^2)) + 1e-12
     if (sqrt(sum((M - M_old)^2)) / denom < tol) break
   }
   list(M = M, L = L, alpha = a, beta = b, grand = g,
-       rank = rnk, iter = it, lambda = lambda)
+       phi = phi, rank = rnk, iter = it, lambda = lambda)
 }

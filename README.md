@@ -154,6 +154,19 @@ methods (DID, MC, TROP) are always computed; `SDID`/`SC` (via `synthdid`) and
 and otherwise skipped with a note. The procedure refits per placebo run, so cap
 `n_runs`/`n_cv_cells` (via `trop_control()`) on large panels.
 
+`metric = "prediction"` gives the paper's Table-1 unit-period counterfactual
+prediction error instead: a block of control cells is held out and each method
+predicts the untreated outcome there through its `counterfactual_matrix()`. This
+now covers the native methods, `DIFP`, and `SDID`/`SC` (when `synthdid` is
+installed); `gsynth`/`augsynth`/`CS` report `NA` for this metric (use
+`"placebo"`).
+
+```r
+panel_rmse(df, "y", "w", "id", "t",
+           methods = c("DID", "MC", "TROP", "DIFP"),
+           metric = "prediction", horizon = 4, n_pseudo = 8, n_runs = 10, seed = 1)
+```
+
 ## Running a single estimator
 
 ```r
@@ -170,6 +183,44 @@ Fix the penalties to recover special cases directly:
 did <- trop(df, "y", "w", "id", "t", lambda = list(time = 0, unit = 0, nn = Inf))
 mc  <- trop(df, "y", "w", "id", "t", lambda = list(time = 0, unit = 0, nn = 5))
 ```
+
+### Covariates
+
+TROP supports time-varying covariates through the additive extension of
+Section 6.2, `L_js = X_js·φ + R_js`: the covariate-linear part is unpenalised and
+the nuclear norm applies only to the residual `R`. Pass the covariate column
+names with `covariates`; the coefficients are returned in `$phi`, and penalty
+cross-validation is performed on the covariate-residualised model, so the
+selected weights account for the covariates.
+
+```r
+fit <- trop(df, "y", "w", "id", "t", covariates = c("x1", "x2"))
+fit$phi              # estimated covariate coefficients
+fit                  # the print method also reports phi
+```
+
+Covariates must be fully observed (including in treated cells, where they enter
+the counterfactual `Y(0)`). They flow through the event study, the standard-error
+resampling, and the fitted counterfactual automatically. With no `covariates`
+the estimator is byte-for-byte unchanged.
+
+## Counterfactual matrix (every method on one footing)
+
+`counterfactual_matrix()` (alias `predict_counterfactual()`) returns a method's
+estimated untreated-potential-outcome `Y(0)` as an `N × T` matrix, giving every
+estimator a common interface:
+
+```r
+M <- counterfactual_matrix(fit)            # a trop fit -> full N x T Y(0)
+cmp <- panel_compare(df, "y", "w", "id", "t")
+Ms  <- counterfactual_matrix(cmp)          # named list, one matrix per method
+```
+
+The native engines (`trop()`, and DID/MC/TROP inside `panel_compare()`) fill
+every cell; methods whose model only defines a treated-unit counterfactual
+(`DIFP`, and `SDID`/`SC`/`gsynth` when their package is installed) fill the
+treated rows and leave control cells `NA`. This is what powers the Table-1-style
+prediction RMSE below.
 
 ## Working from existing results
 

@@ -92,10 +92,26 @@
     se_val <- if (is.matrix(v)) sqrt(v[1, 1]) else as.numeric(v)
   }
   z <- stats::qnorm(1 - (1 - conf_level) / 2)
+  # Reconstruct the treated-cell counterfactual from the fitted weights. For SC
+  # this is the omega-weighted control path; for SDID it adds the lambda-weighted
+  # DID level correction. Guarded: any failure yields NULL (no counterfactual).
+  # Not exercised in-package (synthdid is an optional dependency).
+  cf <- tryCatch({
+    wts <- attr(fit, "weights")
+    omega <- wts$omega; lambda <- wts$lambda
+    base <- as.numeric(crossprod(Ys[seq_len(N0), , drop = FALSE], omega))  # length T
+    tr_avg <- colMeans(Ys[(N0 + 1L):nrow(Ys), , drop = FALSE])
+    icpt <- if (which == "sdid")
+      sum(lambda * (tr_avg[seq_len(T0)] - base[seq_len(T0)])) else 0
+    cf_path <- base + icpt
+    M <- matrix(NA_real_, nrow(Y), ncol(Y), dimnames = dimnames(Y))
+    for (i in pat$treated_units) M[i, ] <- cf_path
+    M
+  }, error = function(e) NULL)
   list(estimate = att, std.error = se_val,
        conf.low = att - z * se_val, conf.high = att + z * se_val,
        se.method = if (want_se) "jackknife" else "none", rank = NA_integer_,
-       counterfactual = NULL, fit = fit)
+       counterfactual = cf, fit = fit)
 }
 
 #' gsynth engine (alternative MC / IFE), optional.
@@ -114,10 +130,22 @@
   att <- fit$att.avg
   se <- tryCatch(fit$est.avg[1, "S.E."], error = function(e) NA_real_)
   z <- stats::qnorm(1 - (1 - conf_level) / 2)
+  # gsynth stores the estimated treated counterfactual in fit$Y.ct (periods x
+  # treated units). Map it back onto an N x T matrix; guarded (optional dep).
+  cf <- tryCatch({
+    Yct <- fit$Y.ct
+    trn <- fit$id.tr %||% colnames(Yct)
+    M <- matrix(NA_real_, length(fit$id), length(fit$time),
+                dimnames = list(as.character(fit$id), as.character(fit$time)))
+    ri <- match(as.character(trn), rownames(M))
+    M[ri, ] <- t(Yct)
+    M
+  }, error = function(e) NULL)
   list(estimate = as.numeric(att), std.error = as.numeric(se),
        conf.low = as.numeric(att) - z * se,
        conf.high = as.numeric(att) + z * se,
-       se.method = "parametric", rank = NA_integer_, fit = fit)
+       se.method = "parametric", rank = NA_integer_,
+       counterfactual = cf, fit = fit)
 }
 
 #' augsynth engine (Augmented Synthetic Control), block designs only, optional.
@@ -258,6 +286,33 @@
   mean(tr_avg[post] - cf_post)
 }
 
+#' DIFP counterfactual matrix: the demeaned-SC group path on treated cells.
+#'
+#' Returns the N x T untreated-potential-outcome matrix implied by DIFP, with the
+#' synthetic-control group path (`.difp_att`'s internal construction) written on
+#' every treated row and `NA` elsewhere. Block designs only.
+#' @keywords internal
+#' @noRd
+.difp_counterfactual <- function(Y, W, pat) {
+  M <- matrix(NA_real_, nrow(Y), ncol(Y), dimnames = dimnames(Y))
+  if (pat$type != "block") return(M)
+  t0 <- pat$block_t0; Tt <- ncol(Y)
+  pre <- seq_len(t0 - 1L)
+  if (length(pre) < 1L) return(M)
+  tu <- pat$treated_units
+  co <- setdiff(seq_len(nrow(Y)), tu)
+  if (length(co) < 1L) return(M)
+  tr_avg <- colMeans(Y[tu, , drop = FALSE])
+  tr_pre_mean <- mean(tr_avg[pre])
+  Cc <- Y[co, , drop = FALSE] - rowMeans(Y[co, pre, drop = FALSE])
+  a <- tr_avg[pre] - tr_pre_mean
+  Xpre <- t(Cc[, pre, drop = FALSE])
+  w <- .sc_simplex(Xpre, a)
+  cf_path <- tr_pre_mean + as.numeric(crossprod(Cc, w))   # length Tt
+  for (i in tu) M[i, ] <- cf_path
+  M
+}
+
 #' DIFP engine (demeaned synthetic control) with optional SE.
 #' @keywords internal
 #' @noRd
@@ -294,8 +349,8 @@
   } else {
     meth <- "none"
   }
-  # counterfactual matrix for plotting (group path repeated across treated rows)
-  Mhat <- matrix(NA_real_, nrow(Y), ncol(Y), dimnames = dimnames(Y))
+  # counterfactual matrix (group SC path written on each treated row)
+  Mhat <- .difp_counterfactual(Y, W, pat)
   list(estimate = att, std.error = se_val,
        conf.low = att - z * se_val, conf.high = att + z * se_val,
        se.method = meth, rank = NA_integer_, counterfactual = Mhat)

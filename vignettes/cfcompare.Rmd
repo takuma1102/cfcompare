@@ -175,6 +175,50 @@ is ordinary two-way fixed effects; with a finite `lambda_nn` and uniform weights
 it is matrix completion; letting cross-validation pick the unit and time weights
 gives the full TROP estimator.
 
+### Adding covariates
+
+When covariates help explain the untreated outcome, the low-rank term can be
+split additively as `L_js = X_js·φ + R_js` (Section 6.2): the covariate-linear
+part is unpenalised and the nuclear norm applies to the residual `R`. Pass the
+column names through `covariates`; cross-validation is then run on the
+covariate-residualised model, and the coefficients come back in `$phi`.
+
+```{r covariates}
+set.seed(1)
+dfx <- df
+dfx$x1 <- rnorm(nrow(dfx))
+dfx$y  <- dfx$y + 1.3 * dfx$x1          # covariate is part of Y(0)
+fitx <- trop(dfx, "y", "w", "id", "t", covariates = "x1", se = "none",
+             control = trop_control(n_cv_cells = 12L, cv_cycles = 1L))
+fitx$phi
+```
+
+Covariates must be fully observed (including treated cells) and flow through the
+event study, the standard errors, and the plotted counterfactual automatically.
+
+### A common counterfactual across methods
+
+`counterfactual_matrix()` (alias `predict_counterfactual()`) returns any fit's
+estimated `Y(0)` as an `N × T` matrix, so methods can be compared on the same
+grid:
+
+```{r cf-matrix}
+M <- counterfactual_matrix(fit)
+dim(M)
+```
+
+For native engines every cell is filled; methods that only define a treated-unit
+counterfactual fill the treated rows and leave controls `NA`. This common
+interface is what lets `panel_rmse(metric = "prediction")` score the paper's
+Table-1 unit-period prediction error across DID, MC, TROP and DIFP (and SDID/SC
+when `synthdid` is installed).
+
+```{r pred-rmse, eval = FALSE}
+panel_rmse(df, "y", "w", "id", "t",
+           methods = c("DID", "MC", "TROP", "DIFP"),
+           metric = "prediction", horizon = 3, n_pseudo = 5, n_runs = 5, seed = 1)
+```
+
 ## Bringing your own results
 
 If you already ran an estimator elsewhere — say `synthdid` directly — coerce it

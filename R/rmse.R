@@ -42,7 +42,13 @@
 #'   (DID, MC, TROP) and wrapped (`SDID`/`SC` via \pkg{synthdid}, `gsynth`,
 #'   `augsynth`, `CS` = Callaway & Sant'Anna via \pkg{did}).
 #' * `metric = "prediction"`: per-cell one-step-ahead held-out RMSE (the paper's
-#'   Table-31 style). Implemented for the native methods (DID, MC, TROP) only.
+#'   Table-1 unit-period counterfactual prediction error). A block of control
+#'   cells is held out and each method predicts the untreated outcome there via
+#'   its counterfactual matrix ([counterfactual_matrix()]). Supported for the
+#'   native methods (`DID`, `MC`, `TROP`), for `DIFP`, and -- when \pkg{synthdid}
+#'   is installed -- for `SDID` and `SC`. The remaining wrapped methods
+#'   (`gsynth`, `augsynth`, `CS`) are reported as `NA` for this metric; use
+#'   `metric = "placebo"` for them.
 #'
 #' Lower is better. Native methods are tuned once on the real data (DID is
 #' parameter-free; MC selects `lambda_nn`; TROP selects the full triplet by
@@ -57,8 +63,9 @@
 #' @param exclude Optional character vector of methods to drop from `methods`
 #'   (e.g. `exclude = "DIFP"`). Unknown names are ignored with a warning.
 #' @param metric `"placebo"` (placebo-ATT RMSE, all methods) or `"prediction"`
-#'   (per-cell held-out RMSE, native methods `"DID"`/`"MC"`/`"TROP"` only; other
-#'   methods, including `"DIFP"`, are ignored for this metric).
+#'   (per-cell held-out counterfactual RMSE for `"DID"`/`"MC"`/`"TROP"`/`"DIFP"`,
+#'   and `"SDID"`/`"SC"` when \pkg{synthdid} is installed; `"gsynth"`,
+#'   `"augsynth"` and `"CS"` are `NA` for this metric).
 #' @param horizon Number of final periods held out per placebo cohort.
 #' @param n_pseudo Number of placebo (pseudo-treated) control units per run.
 #' @param n_runs Number of placebo runs to average over.
@@ -127,26 +134,60 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
   rows <- list()
 
   if (metric == "prediction") {
-    # per-cell held-out prediction RMSE (native methods only)
-    native_names <- intersect(c("DID", "MC", "TROP"), methods)
+    # Per-cell held-out prediction RMSE (the paper's Table-1 quantity): hold out
+    # a block of control cells, have each method predict the untreated outcome
+    # there, and score sqrt(mean((Y - Yhat)^2)). Native engines (DID/MC/TROP) fit
+    # on the full panel with the real-treated and held-out cells masked. The
+    # block estimators (DIFP, and SDID/SC via synthdid) only define a
+    # counterfactual for a clean treated block, so they run on the control-only
+    # panel with the held units pseudo-treated; both score the same held cells.
+    pred_block <- c("DIFP", "SDID", "SC")          # via a counterfactual matrix
+    pred_native <- c("DID", "MC", "TROP")
+    pred_unsupported <- c("gsynth", "augsynth", "CS")
+    use_methods <- intersect(c(pred_native, pred_block), methods)
     # draw all pseudo-cohorts up front (reproducible given seed); the per-run
     # work below is deterministic and runs in parallel when workers > 1.
     pseudo_list <- lapply(seq_len(n_runs), function(r) sample(controls, n_pseudo))
     par <- (control$workers %||% 1L) > 1L
     one_pred_run <- function(pseudo) {
-      excl <- W; excl[pseudo, held_periods] <- 1
-      fit_mask <- 1 - excl
-      H <- cbind(rep(pseudo, each = length(held_periods)),
-                 rep(held_periods, times = length(pseudo)))
-      out <- stats::setNames(rep(NA_real_, length(native_names)), native_names)
-      for (meth in native_names) {
-        lam <- native_cfg[[meth]]$lam
-        wmat <- if (meth == "TROP")
-          .oos_weight_matrix(Y, excl, pseudo, held_periods, lam) else
-          matrix(1, N, Tt)
-        Mhat <- .oos_predict_native(Y, fit_mask, wmat, lam$nn, control)
-        err <- Y[H] - Mhat[H]
-        out[[meth]] <- sqrt(mean(err^2))
+      out <- stats::setNames(rep(NA_real_, length(use_methods)), use_methods)
+      # --- native path: full panel, mask real-treated + held cells ----------
+      nat <- intersect(pred_native, use_methods)
+      if (length(nat)) {
+        excl <- W; excl[pseudo, held_periods] <- 1
+        fit_mask <- 1 - excl
+        H <- cbind(rep(pseudo, each = length(held_periods)),
+                   rep(held_periods, times = length(pseudo)))
+        for (meth in nat) {
+          lam <- native_cfg[[meth]]$lam
+          wmat <- if (meth == "TROP")
+            .oos_weight_matrix(Y, excl, pseudo, held_periods, lam) else
+            matrix(1, N, Tt)
+          Mhat <- .oos_predict_native(Y, fit_mask, wmat, lam$nn, control)
+          out[[meth]] <- sqrt(mean((Y[H] - Mhat[H])^2))
+        }
+      }
+      # --- block path: control-only panel, held units pseudo-treated --------
+      blk <- intersect(pred_block, use_methods)
+      if (length(blk)) {
+        Yc <- Y[controls, , drop = FALSE]
+        pc <- match(pseudo, controls)
+        Wp <- matrix(0, nrow(Yc), Tt, dimnames = dimnames(Yc))
+        Wp[pc, held_periods] <- 1
+        patp <- .assignment_pattern(Wp)
+        Hc <- cbind(rep(pc, each = length(held_periods)),
+                    rep(held_periods, times = length(pc)))
+        cf_of <- function(meth) switch(meth,
+          DIFP = .difp_counterfactual(Yc, Wp, patp),
+          SDID = { e <- .engine_synthdid(Yc, Wp, patp, "sdid", cl, se = "none")
+                   if (inherits(e, "skip")) NULL else e$counterfactual },
+          SC   = { e <- .engine_synthdid(Yc, Wp, patp, "sc", cl, se = "none")
+                   if (inherits(e, "skip")) NULL else e$counterfactual })
+        for (meth in blk) {
+          Mh <- tryCatch(cf_of(meth), error = function(e) NULL)
+          if (!is.null(Mh) && all(is.finite(Mh[Hc])))
+            out[[meth]] <- sqrt(mean((Yc[Hc] - Mh[Hc])^2))
+        }
       }
       out
     }
@@ -156,17 +197,27 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
     run_rmse <- do.call(rbind, runs)
     if (is.null(dim(run_rmse)))
       run_rmse <- matrix(run_rmse, nrow = n_runs,
-                         dimnames = list(NULL, native_names))
-    for (meth in native_names) {
-      v <- run_rmse[, meth]
-      rows[[meth]] <- data.frame(method = meth, rmse = sqrt(mean(v^2)),
-        rmse_se = stats::sd(v) / sqrt(length(v)), n_runs = n_runs,
-        engine = "cfcompare", note = NA_character_, stringsAsFactors = FALSE)
+                         dimnames = list(NULL, use_methods))
+    for (meth in use_methods) {
+      v <- run_rmse[, meth]; v <- v[is.finite(v)]
+      if (length(v) >= 1L) {
+        rows[[meth]] <- data.frame(method = meth, rmse = sqrt(mean(v^2)),
+          rmse_se = if (length(v) >= 2L) stats::sd(v) / sqrt(length(v)) else NA_real_,
+          n_runs = length(v), engine = eng_label(meth), note = NA_character_,
+          stringsAsFactors = FALSE)
+      } else {
+        rows[[meth]] <- data.frame(method = meth, rmse = NA_real_,
+          rmse_se = NA_real_, n_runs = 0L, engine = eng_label(meth),
+          note = if (meth %in% pred_block)
+            "no finite predictions (needs a block design / the 'synthdid' package)"
+            else "no finite predictions",
+          stringsAsFactors = FALSE)
+      }
     }
-    for (meth in setdiff(methods, native_names)) {
+    for (meth in intersect(pred_unsupported, methods)) {
       rows[[meth]] <- data.frame(method = meth, rmse = NA_real_,
         rmse_se = NA_real_, n_runs = 0L, engine = eng_label(meth),
-        note = "metric='prediction' supports native methods only; use metric='placebo'",
+        note = "metric='prediction' not implemented for this method; use metric='placebo'",
         stringsAsFactors = FALSE)
     }
 

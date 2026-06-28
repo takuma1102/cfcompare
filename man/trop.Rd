@@ -10,6 +10,7 @@ trop(
   treatment,
   unit,
   time,
+  covariates = NULL,
   lambda = NULL,
   anchor = c("auto", "per_cell", "pooled"),
   se = c("bootstrap", "auto", "jackknife", "placebo", "none"),
@@ -24,6 +25,15 @@ trop(
 \item{outcome, treatment, unit, time}{Column names (strings). \code{treatment} must be
 a 0/1 indicator of \emph{active} treatment in that cell (works for block,
 staggered, and non-absorbing designs).}
+
+\item{covariates}{Optional character vector of column names for time-varying
+covariates. When supplied, the low-rank term is augmented additively as
+\eqn{L_{js} = X_{js}'\phi + R_{js}} (Athey, Imbens, Qu & Viviano 2025,
+Section 6.2): the covariate-linear part is unpenalised and the nuclear norm
+applies to the residual \eqn{R}. Penalty cross-validation is performed on the
+covariate-residualised model. Covariates must be fully observed (including in
+treated cells, where they enter the counterfactual). The fitted coefficients
+are returned in \verb{$phi}.}
 
 \item{lambda}{Optional named list \code{list(time=, unit=, nn=)} to fix the
 penalties and skip cross-validation.}
@@ -49,8 +59,8 @@ least 2 treated units, else placebo), or \code{"none"}.}
 \value{
 An object of class \code{trop}: a list with the ATT \code{estimate},
 \code{std.error}, \code{conf.low}/\code{conf.high}, the selected penalties \code{lambda},
-per-cell effects, the estimated counterfactual matrix, weights, and the
-reshaped panel.
+any covariate coefficients \code{phi}, per-cell effects, the estimated
+counterfactual matrix, weights, and the reshaped panel.
 }
 \description{
 Fits the TROP estimator of Athey, Imbens, Qu & Viviano (2025) on a long

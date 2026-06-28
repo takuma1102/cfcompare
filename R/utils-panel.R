@@ -50,6 +50,45 @@
   list(Y = Y, W = W, units = units, times = times)
 }
 
+#' Reshape long covariate columns into a list of N x T matrices
+#'
+#' Aligns each covariate column to the same unit/time grid as the outcome and
+#' treatment matrices produced by `.panel_to_matrices()`.
+#'
+#' @param data A long `data.frame`.
+#' @param covariates Character vector of covariate column names (or `NULL`).
+#' @param unit,time Column names (strings).
+#' @param units,times The sorted unit/time labels defining the grid.
+#' @return `NULL` if no covariates, else a named list of N x T numeric matrices.
+#' @keywords internal
+#' @noRd
+.covariate_matrices <- function(data, covariates, unit, time, units, times) {
+  if (is.null(covariates) || !length(covariates)) return(NULL)
+  data <- as.data.frame(data)
+  miss <- setdiff(covariates, names(data))
+  if (length(miss)) {
+    stop("Covariate column(s) not found in `data`: ",
+         paste(miss, collapse = ", "), call. = FALSE)
+  }
+  N <- length(units); Tt <- length(times)
+  idx <- cbind(match(data[[unit]], units), match(data[[time]], times))
+  out <- lapply(covariates, function(cn) {
+    v <- data[[cn]]
+    if (!is.numeric(v)) {
+      stop("Covariate `", cn, "` must be numeric.", call. = FALSE)
+    }
+    M <- matrix(NA_real_, N, Tt,
+                dimnames = list(as.character(units), as.character(times)))
+    M[idx] <- as.numeric(v)
+    if (anyNA(M)) {
+      stop("Covariate `", cn, "` has missing unit-time cells; covariates must ",
+           "be fully observed.", call. = FALSE)
+    }
+    M
+  })
+  stats::setNames(out, covariates)
+}
+
 #' Describe the assignment pattern of a treatment matrix
 #'
 #' Determines whether a treatment matrix follows a synthetic-control-style

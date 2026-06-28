@@ -68,11 +68,11 @@
 #' Solves eq. (2) once for the supplied weights and returns the fitted matrix.
 #' @keywords internal
 #' @noRd
-.trop_solve <- function(Y, W, wmat, lam, ctrl, L_init = NULL) {
+.trop_solve <- function(Y, W, wmat, lam, ctrl, L_init = NULL, X = NULL) {
   mask <- (W == 0) * 1
   .mcnnm_fit(Y, mask, wmat, lam$nn,
              max_iter = ctrl$max_iter, tol = ctrl$tol,
-             L_init = L_init, svd_method = ctrl$svd %||% "truncated")
+             L_init = L_init, svd_method = ctrl$svd %||% "truncated", X = X)
 }
 
 # ---- leave-one-out cross-validation (eq. 4-5) ------------------------------
@@ -85,7 +85,7 @@
 #' eq. (5).
 #' @keywords internal
 #' @noRd
-.trop_cv_Q <- function(Y, W, lam, ctrl, cv_cells, du_list = NULL) {
+.trop_cv_Q <- function(Y, W, lam, ctrl, cv_cells, du_list = NULL, X = NULL) {
   Tt <- ncol(Y)
   one <- function(k) {
     i <- cv_cells[k, 1]; t <- cv_cells[k, 2]
@@ -95,7 +95,7 @@
     # one is supplied (see .trop_select_lambda), else compute it here.
     du <- if (is.null(du_list)) .unit_distance_to(Y, Wk, i, t) else du_list[[k]]
     wmat <- .trop_weight_matrix(du, t, Tt, lam)
-    fit <- .trop_solve(Y, Wk, wmat, lam, ctrl)
+    fit <- .trop_solve(Y, Wk, wmat, lam, ctrl, X = X)
     (Y[i, t] - fit$M[i, t])^2
   }
   par <- (ctrl$workers %||% 1L) > 1L
@@ -111,7 +111,8 @@
 #' cycle.
 #' @keywords internal
 #' @noRd
-.trop_select_lambda <- function(Y, W, grids, ctrl, cv_cells, verbose = FALSE) {
+.trop_select_lambda <- function(Y, W, grids, ctrl, cv_cells, verbose = FALSE,
+                                X = NULL) {
   lam <- list(time = 0, unit = 0, nn = Inf)
   # Unit distances for each held-out CV cell do not depend on the penalties, so
   # compute them once and reuse across the whole penalty search (big saving:
@@ -121,7 +122,8 @@
     Wk <- W; Wk[i, t] <- 1
     .unit_distance_to(Y, Wk, i, t)
   })
-  eval_one <- function(lam) .trop_cv_Q(Y, W, lam, ctrl, cv_cells, du_list = du_cache)
+  eval_one <- function(lam) .trop_cv_Q(Y, W, lam, ctrl, cv_cells,
+                                       du_list = du_cache, X = X)
 
   pick <- function(lam, which, grid) {
     qs <- vapply(grid, function(v) {
@@ -153,7 +155,7 @@
 #' Default penalty grids derived from the data scale.
 #' @keywords internal
 #' @noRd
-.trop_default_grids <- function(Y, W, n_unit = 6L, n_time = 7L) {
+.trop_default_grids <- function(Y, W, n_unit = 6L, n_time = 7L, X = NULL) {
   # nuclear-norm grid from singular values of the demeaned control matrix
   Yc <- Y
   Yc[W == 1 | is.na(Yc)] <- NA
@@ -162,6 +164,16 @@
   Z[is.na(Z)] <- fill
   Z <- Z - rowMeans(Z)
   Z <- t(t(Z) - colMeans(Z))
+  # With covariates the nuclear norm penalises the residual R = L - X phi, so
+  # scale the grid off the covariate-residualised matrix (partial the covariates
+  # out of the already two-way-demeaned Z).
+  Xl <- .as_cov_list(X, nrow(Y), ncol(Y))
+  if (length(Xl)) {
+    Xdd <- matrix(unlist(lapply(Xl, function(M) as.numeric(.double_demean(M))),
+                         use.names = FALSE), ncol = length(Xl))
+    cf <- qr.coef(qr(Xdd), as.numeric(Z)); cf[is.na(cf)] <- 0
+    Z <- matrix(as.numeric(Z) - as.numeric(Xdd %*% cf), nrow(Y), ncol(Y))
+  }
   s1 <- tryCatch(max(svd(Z)$d), error = function(e) 1)
   nn_grid <- c(Inf, s1 * c(0.5, 0.25, 0.1, 0.05, 0.02))
 
@@ -195,6 +207,14 @@
 #' @param outcome,treatment,unit,time Column names (strings). `treatment` must be
 #'   a 0/1 indicator of *active* treatment in that cell (works for block,
 #'   staggered, and non-absorbing designs).
+#' @param covariates Optional character vector of column names for time-varying
+#'   covariates. When supplied, the low-rank term is augmented additively as
+#'   \eqn{L_{js} = X_{js}'\phi + R_{js}} (Athey, Imbens, Qu & Viviano 2025,
+#'   Section 6.2): the covariate-linear part is unpenalised and the nuclear norm
+#'   applies to the residual \eqn{R}. Penalty cross-validation is performed on the
+#'   covariate-residualised model. Covariates must be fully observed (including in
+#'   treated cells, where they enter the counterfactual). The fitted coefficients
+#'   are returned in `$phi`.
 #' @param lambda Optional named list `list(time=, unit=, nn=)` to fix the
 #'   penalties and skip cross-validation.
 #' @param anchor How weights are anchored to treated cells: `"per_cell"`
@@ -212,8 +232,8 @@
 #' @param verbose Logical; print CV progress.
 #' @return An object of class `trop`: a list with the ATT `estimate`,
 #'   `std.error`, `conf.low`/`conf.high`, the selected penalties `lambda`,
-#'   per-cell effects, the estimated counterfactual matrix, weights, and the
-#'   reshaped panel.
+#'   any covariate coefficients `phi`, per-cell effects, the estimated
+#'   counterfactual matrix, weights, and the reshaped panel.
 #' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
 #'   Triply Robust Panel Estimators. arXiv:2508.21536.
 #' @examples
@@ -223,6 +243,7 @@
 #' fit
 #' @export
 trop <- function(data, outcome, treatment, unit, time,
+                 covariates = NULL,
                  lambda = NULL,
                  anchor = c("auto", "per_cell", "pooled"),
                  se = c("bootstrap", "auto", "jackknife", "placebo", "none"),
@@ -234,16 +255,19 @@ trop <- function(data, outcome, treatment, unit, time,
   m <- .panel_to_matrices(data, outcome, treatment, unit, time)
   Y <- m$Y; W <- m$W
   pat <- .assignment_pattern(W)
+  X <- .covariate_matrices(data, covariates, unit, time, m$units, m$times)
 
   n_cells <- pat$n_treated_cells
   if (anchor == "auto") {
     anchor <- if (n_cells <= control$max_cells) "per_cell" else "pooled"
   }
 
-  if (is.null(grids)) grids <- .trop_default_grids(Y, W)
+  if (is.null(grids)) grids <- .trop_default_grids(Y, W, X = X)
 
   eng <- .trop_engine(Y, W, pat, lambda, grids, control, anchor, se,
-                      control$conf_level, verbose)
+                      control$conf_level, verbose, X = X)
+  if (length(eng$phi)) eng$phi <- stats::setNames(eng$phi, covariates)
+  m$X <- X
 
   structure(
     c(eng, list(
@@ -251,6 +275,7 @@ trop <- function(data, outcome, treatment, unit, time,
       pattern = pat,
       panel = m,
       outcome = outcome,
+      covariates = covariates,
       call = match.call()
     )),
     class = "trop"
@@ -264,23 +289,23 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @keywords internal
 #' @noRd
 .trop_engine <- function(Y, W, pat, lambda, grids, control, anchor, se,
-                         conf_level, verbose = FALSE) {
+                         conf_level, verbose = FALSE, X = NULL) {
  .with_workers(control$workers %||% 1L, {
   # ---- choose penalties via CV (unless supplied) ----
   if (is.null(lambda)) {
     cv_cells <- .sample_control_cells(W, control$n_cv_cells, control$seed)
-    lam <- .trop_select_lambda(Y, W, grids, control, cv_cells, verbose)
+    lam <- .trop_select_lambda(Y, W, grids, control, cv_cells, verbose, X = X)
   } else {
     lam <- utils::modifyList(list(time = 0, unit = 0, nn = Inf), lambda)
     lam$Q <- NA_real_
   }
 
-  est <- .trop_att(Y, W, lam, control, anchor, pat)
+  est <- .trop_att(Y, W, lam, control, anchor, pat, X = X)
 
   if (identical(se, "auto")) {
     se <- if (pat$n_treated_units >= 2) "jackknife" else "placebo"
   }
-  inf <- .trop_se(Y, W, lam, control, anchor, pat, est, se, conf_level)
+  inf <- .trop_se(Y, W, lam, control, anchor, pat, est, se, conf_level, X = X)
 
   list(
     estimate = est$att,
@@ -293,7 +318,8 @@ trop <- function(data, outcome, treatment, unit, time,
     anchor = anchor,
     tau_cells = est$tau_cells,
     counterfactual = est$Mhat,
-    rank = est$rank
+    rank = est$rank,
+    phi = est$phi
   )
  })
 }
@@ -329,32 +355,42 @@ trop <- function(data, outcome, treatment, unit, time,
 #' ATT given fixed penalties.
 #' @keywords internal
 #' @noRd
-.trop_att <- function(Y, W, lam, ctrl, anchor, pat) {
+.trop_att <- function(Y, W, lam, ctrl, anchor, pat, X = NULL) {
   N <- nrow(Y); Tt <- ncol(Y)
   treated_cells <- which(W == 1, arr.ind = TRUE)
   Mhat <- matrix(NA_real_, N, Tt, dimnames = dimnames(Y))
   rnk <- NA_integer_
+  phi <- numeric(0)
 
   if (anchor == "pooled") {
     du <- .unit_distance_pooled(Y, W, pat$treated_units)
     t_anchor <- sort(unique(treated_cells[, 2]))
     wmat <- .trop_weight_matrix(du, t_anchor, Tt, lam)
-    fit <- .trop_solve(Y, W, wmat, lam, ctrl)
+    fit <- .trop_solve(Y, W, wmat, lam, ctrl, X = X)
     Mhat <- fit$M
     rnk <- fit$rank
+    phi <- fit$phi
   } else {
     ranks <- integer(nrow(treated_cells))
+    phis <- vector("list", nrow(treated_cells))
     L_prev <- NULL                      # warm start: reuse the previous cell's L
     for (k in seq_len(nrow(treated_cells))) {
       i <- treated_cells[k, 1]; t <- treated_cells[k, 2]
       du <- .unit_distance_to(Y, W, i, t)
       wmat <- .trop_weight_matrix(du, t, Tt, lam)
-      fit <- .trop_solve(Y, W, wmat, lam, ctrl, L_init = L_prev)
+      fit <- .trop_solve(Y, W, wmat, lam, ctrl, L_init = L_prev, X = X)
       Mhat[i, t] <- fit$M[i, t]
       ranks[k] <- fit$rank
+      phis[[k]] <- fit$phi
       L_prev <- fit$L                   # consecutive cells share dimensions
     }
     rnk <- round(mean(ranks))
+    # per-cell anchor re-solves once per treated cell; report the average
+    # covariate coefficient across cells as a summary (the cell-specific phi is
+    # already baked into each cell's counterfactual above).
+    if (length(phis) && length(phis[[1]]))
+      phi <- rowMeans(matrix(unlist(phis, use.names = FALSE),
+                             nrow = length(phis[[1]])))
   }
 
   tau <- Y[treated_cells] - Mhat[treated_cells]
@@ -366,16 +402,21 @@ trop <- function(data, outcome, treatment, unit, time,
     tau = tau,
     stringsAsFactors = FALSE
   )
-  list(att = mean(tau), tau_cells = tau_cells, Mhat = Mhat, rank = rnk)
+  list(att = mean(tau), tau_cells = tau_cells, Mhat = Mhat, rank = rnk,
+       phi = phi)
 }
 
 #' Standard errors for the TROP ATT (jackknife / placebo).
 #' @keywords internal
 #' @noRd
-.trop_se <- function(Y, W, lam, ctrl, anchor, pat, est, method, conf_level) {
+.trop_se <- function(Y, W, lam, ctrl, anchor, pat, est, method, conf_level,
+                     X = NULL) {
   z <- stats::qnorm(1 - (1 - conf_level) / 2)
   na_out <- list(se = NA_real_, conf.low = NA_real_, conf.high = NA_real_)
   if (method == "none") return(na_out)
+  sub_rows <- function(idx) if (is.null(X)) NULL else
+    lapply(.as_cov_list(X, nrow(Y), ncol(Y)),
+           function(M) M[idx, , drop = FALSE])
 
   if (method == "jackknife") {
     tu <- pat$treated_units
@@ -388,7 +429,7 @@ trop <- function(data, outcome, treatment, unit, time,
       Yk <- Y[keep, , drop = FALSE]
       Wk <- W[keep, , drop = FALSE]
       patk <- .assignment_pattern(Wk)
-      .trop_att(Yk, Wk, lam, ctrl, anchor, patk)$att
+      .trop_att(Yk, Wk, lam, ctrl, anchor, patk, X = sub_rows(keep))$att
     }, parallel = par), use.names = FALSE)
     v <- (G - 1) / G * sum((atts - mean(atts))^2)
     se <- sqrt(v)
@@ -417,7 +458,8 @@ trop <- function(data, outcome, treatment, unit, time,
       patb <- .assignment_pattern(Wb)
       if (patb$n_treated_units < 1 || length(setdiff(seq_len(nrow(Yb)),
           patb$treated_units)) < 1) return(NA_real_)
-      tryCatch(.trop_att(Yb, Wb, lam, ctrl, anchor, patb)$att,
+      tryCatch(.trop_att(Yb, Wb, lam, ctrl, anchor, patb,
+                         X = sub_rows(idx))$att,
                error = function(e) NA_real_)
     }
     boot <- unlist(.par_lapply(idx_list, one_boot, parallel = par),
@@ -445,7 +487,7 @@ trop <- function(data, outcome, treatment, unit, time,
       Wp <- matrix(0, nrow(Y), ncol(Y), dimnames = dimnames(Y))
       Wp[ci, tcols] <- 1
       patp <- .assignment_pattern(Wp)
-      .trop_att(Y, Wp, lam, ctrl, anchor, patp)$att
+      .trop_att(Y, Wp, lam, ctrl, anchor, patp, X = X)$att
     }, parallel = par), use.names = FALSE)
     se <- stats::sd(placebo)
   }
@@ -514,6 +556,11 @@ print.trop <- function(x, ...) {
               x$rank, x$anchor, x$pattern$type))
   cat(sprintf("  treated cells=%d across %d unit(s)\n",
               x$pattern$n_treated_cells, x$pattern$n_treated_units))
+  if (length(x$phi)) {
+    nm <- names(x$phi) %||% paste0("X", seq_along(x$phi))
+    cat("  covariate coefficients (phi):\n")
+    cat(paste0(sprintf("    %-12s % .4g", nm, x$phi), collapse = "\n"), "\n")
+  }
   invisible(x)
 }
 
@@ -528,12 +575,12 @@ print.trop <- function(x, ...) {
 #' full N x T fitted matrix.
 #' @keywords internal
 #' @noRd
-.trop_pooled_M <- function(Y, W, lam, ctrl, pat) {
+.trop_pooled_M <- function(Y, W, lam, ctrl, pat, X = NULL) {
   tu <- pat$treated_units
   du <- .unit_distance_pooled(Y, W, tu)
   t_anchor <- sort(unique(which(W == 1, arr.ind = TRUE)[, 2]))
   wmat <- .trop_weight_matrix(du, t_anchor, ncol(Y), lam)
-  .trop_solve(Y, W, wmat, lam, ctrl)$M
+  .trop_solve(Y, W, wmat, lam, ctrl, X = X)$M
 }
 
 #' Average treatment effect by event time (period relative to treatment).
@@ -547,11 +594,11 @@ print.trop <- function(x, ...) {
 #' @keywords internal
 #' @noRd
 .trop_period_effects <- function(Y, W, lam, ctrl, pat, pre_periods = TRUE,
-                                 M = NULL) {
+                                 M = NULL, X = NULL) {
   tu <- pat$treated_units
   if (length(tu) < 1) return(list(effect = numeric(0), n = integer(0)))
   Tt <- ncol(Y)
-  if (is.null(M)) M <- .trop_pooled_M(Y, W, lam, ctrl, pat)
+  if (is.null(M)) M <- .trop_pooled_M(Y, W, lam, ctrl, pat, X = X)
   gap <- Y - M
   t0 <- vapply(tu, function(i) {
     w <- which(W[i, ] == 1); if (length(w)) min(w) else NA_integer_
@@ -578,7 +625,7 @@ print.trop <- function(x, ...) {
 #' @keywords internal
 #' @noRd
 .trop_event_se <- function(Y, W, lam, ctrl, pat, point, method, conf_level,
-                           pre_periods) {
+                           pre_periods, X = NULL) {
   ev <- names(point)
   z <- stats::qnorm(1 - (1 - conf_level) / 2)
   na_vec <- function() stats::setNames(rep(NA_real_, length(ev)), ev)
@@ -586,6 +633,9 @@ print.trop <- function(x, ...) {
                            conf.high = na_vec(), n_boot = NULL)
   if (method == "none") return(empty())
   par <- (ctrl$workers %||% 1L) > 1L
+  sub_rows <- function(idx) if (is.null(X)) NULL else
+    lapply(.as_cov_list(X, nrow(Y), ncol(Y)),
+           function(M) M[idx, , drop = FALSE])
   to_row <- function(v) { r <- v[ev]; names(r) <- ev; r }
   col_sd <- function(M) apply(M, 2, function(x) {
     x <- x[is.finite(x)]; if (length(x) < 2) NA_real_ else stats::sd(x)
@@ -598,7 +648,8 @@ print.trop <- function(x, ...) {
       keep <- setdiff(seq_len(nrow(Y)), tu[g])
       Yk <- Y[keep, , drop = FALSE]; Wk <- W[keep, , drop = FALSE]
       patk <- .assignment_pattern(Wk)
-      to_row(.trop_period_effects(Yk, Wk, lam, ctrl, patk, pre_periods)$effect)
+      to_row(.trop_period_effects(Yk, Wk, lam, ctrl, patk, pre_periods,
+                                  X = sub_rows(keep))$effect)
     }, parallel = par)
     M <- do.call(rbind, reps)
     v <- vapply(seq_len(ncol(M)), function(j) {
@@ -630,7 +681,8 @@ print.trop <- function(x, ...) {
       if (patb$n_treated_units < 1 || length(setdiff(seq_len(nrow(Yb)),
           patb$treated_units)) < 1) return(na_vec())
       tryCatch(
-        to_row(.trop_period_effects(Yb, Wb, lam, ctrl, patb, pre_periods)$effect),
+        to_row(.trop_period_effects(Yb, Wb, lam, ctrl, patb, pre_periods,
+                                    X = sub_rows(idx))$effect),
         error = function(e) na_vec())
     }
     reps <- .par_lapply(idx_list, one, parallel = par)
@@ -660,7 +712,8 @@ print.trop <- function(x, ...) {
     Wp <- matrix(0, nrow(Y), ncol(Y), dimnames = dimnames(Y))
     Wp[ci, tcols] <- 1
     patp <- .assignment_pattern(Wp)
-    to_row(.trop_period_effects(Y, Wp, lam, ctrl, patp, pre_periods)$effect)
+    to_row(.trop_period_effects(Y, Wp, lam, ctrl, patp, pre_periods,
+                                X = X)$effect)
   }, parallel = par)
   M <- do.call(rbind, reps); se <- col_sd(M)
   list(se = stats::setNames(se, ev),
@@ -722,17 +775,19 @@ trop_event_study <- function(object,
   conf_level <- object$conf.level %||% control$conf_level
   Y <- object$panel$Y; W <- object$panel$W
   pat <- object$pattern; lam <- object$lambda
+  X <- object$panel$X
   if (pat$n_treated_units < 1) stop("No treated units.", call. = FALSE)
 
   .with_workers(control$workers %||% 1L, {
-    M <- .trop_pooled_M(Y, W, lam, control, pat)
-    pe <- .trop_period_effects(Y, W, lam, control, pat, pre_periods, M = M)
+    M <- .trop_pooled_M(Y, W, lam, control, pat, X = X)
+    pe <- .trop_period_effects(Y, W, lam, control, pat, pre_periods, M = M,
+                               X = X)
     point <- pe$effect
     if (!length(point)) stop("No event-time cells.", call. = FALSE)
     evt <- as.integer(names(point)); ord <- order(evt)
     point <- point[ord]; evt <- evt[ord]
     inf <- .trop_event_se(Y, W, lam, control, pat, point, se, conf_level,
-                          pre_periods)
+                          pre_periods, X = X)
     res <- data.frame(
       event_time = evt,
       estimate   = as.numeric(point),

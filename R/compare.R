@@ -87,6 +87,7 @@ panel_compare <- function(data, outcome, treatment, unit, time,
       } else {
         rows[[meth]] <- .engine_row(meth, "synthdid", eng, pat, outcome)
         fits[[meth]] <- eng$fit
+        if (!is.null(eng$counterfactual)) cfs[[meth]] <- eng$counterfactual
       }
     } else if (meth == "gsynth") {
       eng <- .engine_gsynth(data, outcome, treatment, unit, time, "mc", cl)
@@ -97,6 +98,7 @@ panel_compare <- function(data, outcome, treatment, unit, time,
       } else {
         rows[["gsynth"]] <- .engine_row("gsynth", "gsynth", eng, pat, outcome)
         fits[["gsynth"]] <- eng$fit
+        if (!is.null(eng$counterfactual)) cfs[["gsynth"]] <- eng$counterfactual
       }
     } else if (meth == "augsynth") {
       eng <- .engine_augsynth(data, outcome, treatment, unit, time, pat, cl)
