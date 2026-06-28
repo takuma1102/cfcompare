@@ -17,5 +17,7 @@ A \code{ggplot} object.
 \description{
 Cells are coloured by cross-validation loss (darker = better out-of-sample
 fit) and annotated with the ATT estimate at that penalty pair; the
-CV-selected cell is outlined.
+CV-selected cell is outlined. The two swept penalties (see the \code{axes}
+argument of \code{\link[=trop_sensitivity]{trop_sensitivity()}}) form the x and y axes, and the fixed
+penalty is reported in the subtitle.
 }

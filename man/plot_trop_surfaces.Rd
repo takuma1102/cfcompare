@@ -26,14 +26,16 @@ the second figure. Defaults to \code{interactive()}.}
 }
 \value{
 Invisibly, a list with the \code{cv_loss} and \code{att} surface matrices
-(rows = \code{lambda_time}, columns = \code{lambda_nn}).
+(rows = y-axis penalty, columns = x-axis penalty).
 }
 \description{
 Draws the cross-validation-loss surface and the ATT surface from a
 \code{\link[=trop_sensitivity]{trop_sensitivity()}} grid as two separate, full-width base-graphics plots,
 each with a colour key (legend) on the right. Unlike \code{\link[=autoplot.cf_trop_grid]{autoplot.cf_trop_grid()}}
 --- a single \code{ggplot2} heatmap that packs both into one panel --- this view
-keeps the surfaces apart so neither is squeezed, and needs no \code{ggplot2}.
+keeps the surfaces apart so neither is squeezed, and needs no \code{ggplot2}. The
+surface axes follow the swept penalties recorded on the grid (see the \code{axes}
+argument of \code{\link[=trop_sensitivity]{trop_sensitivity()}}).
 }
 \examples{
 \donttest{

@@ -13,6 +13,7 @@ trop_sensitivity(
   lambda_time = NULL,
   lambda_nn = NULL,
   lambda_unit = NULL,
+  axes = c("nn", "time"),
   anchor = "pooled",
   control = trop_control(),
   seed = NULL,
@@ -24,12 +25,17 @@ trop_sensitivity(
 
 \item{outcome, treatment, unit, time}{Column names (strings).}
 
-\item{lambda_time, lambda_nn}{Numeric grids for the two swept penalties.
-Defaults are derived from the data scale; \code{lambda_nn} defaults to the finite
-part of the default grid (the heatmap axis needs finite values).}
+\item{lambda_time, lambda_nn, lambda_unit}{Penalty inputs. For a penalty that
+is on an axis (see \code{axes}), supply a numeric grid to sweep (or \code{NULL} for a
+data-driven default grid; the \code{lambda_nn} default keeps only the finite
+part, as the heatmap axis needs finite values). For the penalty held fixed,
+supply a single value, or \code{NULL} to choose it once by cross-validation and
+hold it fixed across the sweep.}
 
-\item{lambda_unit}{The fixed unit penalty. If \code{NULL}, it is chosen once by
-cross-validation and held fixed across the sweep.}
+\item{axes}{Length-2 character vector naming the two penalties to sweep, as
+\code{c(x, y)}: the first is the x axis, the second the y axis. Each must be one
+of \code{"time"}, \code{"unit"}, \code{"nn"}. Defaults to \code{c("nn", "time")} (the
+historical layout). The third penalty is held fixed.}
 
 \item{anchor}{Estimation anchor passed to the ATT computation
 (\code{"pooled"} by default for speed).}
@@ -42,16 +48,22 @@ cross-validation and held fixed across the sweep.}
 }
 \value{
 A \code{cf_trop_grid} (a \code{data.frame}) with columns \code{lambda_time},
-\code{lambda_nn}, \code{lambda_unit}, \code{att}, \code{cv_loss}. The grid point minimising
-\code{cv_loss} (the data-driven choice) is stored in \code{attr(., "selected")}.
+\code{lambda_nn}, \code{lambda_unit}, \code{att}, \code{cv_loss}. The two swept penalties vary
+across rows; the fixed penalty is constant. The grid point minimising
+\code{cv_loss} (the data-driven choice) is stored in \code{attr(., "selected")}, and
+the chosen layout in \code{attr(., "axes")} (named \code{x}/\code{y}) and
+\code{attr(., "fixed")}.
 }
 \description{
-Sweeps the time penalty \eqn{\lambda_{time}} against the nuclear-norm penalty
-\eqn{\lambda_{nn}} (holding the unit penalty fixed) and records, at each grid
-point, both the resulting ATT estimate and the leave-one-out cross-validation
-loss. This is the data behind the diagnostic heatmap: colour the cells by CV
-loss to see where the data-driven choice lands, and read the ATT off each cell
-to judge how sensitive the estimate is to the penalties.
+Sweeps any two of the three TROP penalties --- \eqn{\lambda_{time}},
+\eqn{\lambda_{unit}} and \eqn{\lambda_{nn}} --- against each other while
+holding the third fixed, and records at each grid point both the resulting
+ATT estimate and the leave-one-out cross-validation loss. This is the data
+behind the diagnostic heatmap: colour the cells by CV loss to see where the
+data-driven choice lands, and read the ATT off each cell to judge how
+sensitive the estimate is to the penalties. Use \code{axes} to choose which two
+penalties go on the x and y axes; the remaining (fixed) penalty is reported
+in the heatmap subtitle.
 }
 \examples{
 \donttest{
@@ -60,6 +72,12 @@ g <- trop_sensitivity(df, "y", "w", "id", "t",
                       lambda_time = c(0, 0.1, 0.5), lambda_nn = c(2, 5),
                       control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
 autoplot(g)
+
+# Sweep the unit penalty against the nuclear-norm penalty instead, holding
+# the time penalty fixed (chosen by CV):
+g2 <- trop_sensitivity(df, "y", "w", "id", "t", axes = c("nn", "unit"),
+                       control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
+autoplot(g2)
 }
 }
 \seealso{

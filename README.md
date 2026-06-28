@@ -250,7 +250,11 @@ panel_compare(ss, "y", "w", "id", "t")  # which estimator recovers it?
 
 `autoplot()` on a `trop` fit gives a synthetic-control-style trajectory plot: the
 treated-unit average against the estimated `Y(0)`, the post-treatment gap (the
-effect) shaded, and the TROP time weights drawn as a ribbon along the bottom.
+effect) shaded, and the TROP time weights `theta_s = exp(-lambda_time * |t - s|)`
+drawn as a filled band along the bottom (in the style of `synthdid`'s time-weight
+strip). The band shows *time weights* — how much each period is leaned on — not
+observation counts; with `lambda_time = 0` the weights are uniform and the band is
+flat. Pass `show_weights = FALSE` to hide it.
 
 ```r
 autoplot(trop(df, "y", "w", "id", "t"))

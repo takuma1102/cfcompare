@@ -128,11 +128,14 @@ plot_counterfactual <- function(x, methods = NULL) {
 #' (counterfactual) path, in the style of the \pkg{synthdid} plot: a dotted line
 #' marks the first treated period, the post-treatment gap between the two lines is
 #' the estimated effect, and -- since TROP carries explicit time weights -- the
-#' time weights \eqn{\theta_s} are drawn as a ribbon along the bottom to show
-#' which periods the counterfactual leans on.
+#' time weights \eqn{\theta_s = \exp(-\lambda_{time} |t - s|)} are drawn as a
+#' filled band along the bottom (as in \pkg{synthdid}'s time-weight strip) to
+#' show which periods the counterfactual leans on. The band shows weights, not
+#' observation counts; heights are scaled to the largest weight, and with
+#' \eqn{\lambda_{time} = 0} the weights are uniform and the band is flat.
 #'
 #' @param object A `trop` fit from [trop()].
-#' @param show_weights Logical; draw the time-weight ribbon along the bottom.
+#' @param show_weights Logical; draw the time-weight band along the bottom.
 #' @param ... Unused.
 #' @return A `ggplot` object.
 #' @export
@@ -206,18 +209,29 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
                           colour = "grey50")
   }
 
-  if (show_weights && lam$time > 0) {
+  if (show_weights && length(t_anchor)) {
+    # TROP time weights theta_s = exp(-lambda_time * |t - s|): how much each
+    # period is leaned on. Drawn as a filled band along the bottom in the style
+    # of synthdid's time-weight strip (not observation counts). Heights are
+    # scaled to the largest weight so the shape is readable; with lambda_time = 0
+    # the weights are uniform and the band is flat.
     s <- seq_len(Tt)
     dtime <- vapply(s, function(ss) min(abs(ss - t_anchor)), numeric(1))
     theta <- exp(-lam$time * dtime)
-    rng <- range(c(obs, cf), na.rm = TRUE)
-    base <- rng[1] - 0.12 * diff(rng)
-    h <- 0.10 * diff(rng)
+    theta <- theta / max(theta)
+    rng  <- range(c(obs, cf), na.rm = TRUE)
+    base <- rng[1] - 0.14 * diff(rng)      # baseline below the trajectories
+    h    <- 0.10 * diff(rng)               # band height at full weight
     wr <- data.frame(time = times, ymin = base, ymax = base + h * theta)
-    p <- p + ggplot2::geom_rect(data = wr, inherit.aes = FALSE,
-      ggplot2::aes(xmin = .data$time - 0.45, xmax = .data$time + 0.45,
-                   ymin = .data$ymin, ymax = .data$ymax),
-      fill = "#1b9e9e", alpha = 0.35)
+    p <- p +
+      ggplot2::geom_ribbon(data = wr, inherit.aes = FALSE,
+        ggplot2::aes(x = .data$time, ymin = .data$ymin, ymax = .data$ymax),
+        fill = "#1b9e9e", alpha = 0.30) +
+      ggplot2::geom_line(data = wr, inherit.aes = FALSE,
+        ggplot2::aes(x = .data$time, y = .data$ymax),
+        colour = "#1b9e9e", linewidth = 0.5) +
+      ggplot2::geom_hline(yintercept = base, colour = "grey75", linewidth = 0.3) +
+      ggplot2::labs(caption = "bottom band: TROP time weights (theta_s)")
   }
 
   p + ggplot2::theme_minimal(base_size = 12) +

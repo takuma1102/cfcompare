@@ -9,7 +9,7 @@
 \arguments{
 \item{object}{A \code{trop} fit from \code{\link[=trop]{trop()}}.}
 
-\item{show_weights}{Logical; draw the time-weight ribbon along the bottom.}
+\item{show_weights}{Logical; draw the time-weight band along the bottom.}
 
 \item{...}{Unused.}
 }
@@ -21,8 +21,11 @@ Draws the treated-unit average observed path against the estimated untreated
 (counterfactual) path, in the style of the \pkg{synthdid} plot: a dotted line
 marks the first treated period, the post-treatment gap between the two lines is
 the estimated effect, and -- since TROP carries explicit time weights -- the
-time weights \eqn{\theta_s} are drawn as a ribbon along the bottom to show
-which periods the counterfactual leans on.
+time weights \eqn{\theta_s = \exp(-\lambda_{time} |t - s|)} are drawn as a
+filled band along the bottom (as in \pkg{synthdid}'s time-weight strip) to
+show which periods the counterfactual leans on. The band shows weights, not
+observation counts; heights are scaled to the largest weight, and with
+\eqn{\lambda_{time} = 0} the weights are uniform and the band is flat.
 }
 \examples{
 \donttest{

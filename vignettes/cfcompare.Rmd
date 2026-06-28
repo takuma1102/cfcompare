@@ -123,6 +123,19 @@ head(fit$tau_cells)
 fit$lambda
 ```
 
+Calling `autoplot()` on a single `trop` fit gives a synthetic-control-style
+trajectory: the treated-unit average against the estimated `Y(0)`, with the
+post-treatment gap (the effect) shaded. Because TROP carries explicit time
+weights, the weights `theta_s = exp(-lambda_time * |t - s|)` are drawn as a
+filled band along the bottom, in the style of `synthdid`'s time-weight strip.
+The band shows *time weights* — how much each period the counterfactual leans on
+— not observation counts; it is flat when `lambda_time = 0` (uniform weighting).
+Use `show_weights = FALSE` to drop the band.
+
+```{r trop-autoplot, fig.width = 6, fig.height = 4.5, fig.alt = "TROP trajectory: observed vs. estimated Y(0) with the time-weight band along the bottom"}
+autoplot(fit)
+```
+
 ### Recovering special cases
 
 The TROP program nests DID and matrix completion. Fixing the penalties by hand
