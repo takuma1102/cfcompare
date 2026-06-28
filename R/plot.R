@@ -107,16 +107,15 @@ plot_counterfactual <- function(x, methods = NULL) {
   t0_time <- if (!is.na(x$pattern$block_t0)) times[x$pattern$block_t0] else NA
 
   p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data$time, y = .data$value,
-                                         colour = .data$series,
-                                         linetype = .data$series)) +
+                                         colour = .data$series)) +
     ggplot2::geom_line(linewidth = 0.9)
   if (!is.na(t0_time)) {
-    p <- p + ggplot2::geom_vline(xintercept = t0_time, linetype = "dotted",
-                                 colour = "grey50")
+    p <- p + ggplot2::geom_vline(xintercept = t0_time, linetype = "dashed",
+                                 colour = "grey40", linewidth = 0.6)
   }
   p +
     ggplot2::labs(x = "Time", y = "Outcome (treated-unit average)",
-                  colour = NULL, linetype = NULL,
+                  colour = NULL,
                   title = "Observed vs. predicted counterfactual") +
     ggplot2::theme_minimal(base_size = 12) +
     .center_titles()
@@ -125,7 +124,7 @@ plot_counterfactual <- function(x, methods = NULL) {
 #' Synthetic-control-style trajectory plot for a single TROP fit
 #'
 #' Draws the treated-unit average observed path against the estimated untreated
-#' (counterfactual) path, in the style of the \pkg{synthdid} plot: a dotted line
+#' (counterfactual) path, in the style of the \pkg{synthdid} plot: a dashed line
 #' marks the first treated period, the post-treatment gap between the two lines is
 #' the estimated effect, and -- since TROP carries explicit time weights -- the
 #' time weights \eqn{\theta_s = \exp(-\lambda_{time} |t - s|)} are drawn as a
@@ -134,10 +133,23 @@ plot_counterfactual <- function(x, methods = NULL) {
 #' observation counts; heights are scaled to the largest weight, and with
 #' \eqn{\lambda_{time} = 0} the weights are uniform and the band is flat.
 #'
+#' This is a *point-estimate* trajectory: it shows no standard errors or
+#' confidence intervals (the post-treatment gap is left unshaded so it is not
+#' mistaken for a confidence band). To visualise the fit's uncertainty, use
+#' [trop_event_study()] and call [autoplot()] on the result, which draws
+#' per-period estimates with pointwise confidence bars. Accordingly the subtitle
+#' reports only the selected penalties by default; set `show_se = TRUE` to also
+#' note which standard-error method the fit used.
+#'
 #' @param object A `trop` fit from [trop()].
 #' @param show_weights Logical; draw the time-weight band along the bottom.
+#' @param show_se Logical; append the fit's standard-error method to the subtitle.
+#'   Defaults to `FALSE` because this plot does not display standard errors --
+#'   see [trop_event_study()] for the uncertainty visualisation.
 #' @param ... Unused.
 #' @return A `ggplot` object.
+#' @seealso [trop_event_study()] and its `autoplot()` method for per-period
+#'   effects with confidence bars.
 #' @export
 #' @examples
 #' \donttest{
@@ -145,7 +157,7 @@ plot_counterfactual <- function(x, methods = NULL) {
 #' autoplot(trop(df, "y", "w", "id", "t",
 #'               control = trop_control(n_cv_cells = 8L, cv_cycles = 1L)))
 #' }
-autoplot.trop <- function(object, show_weights = TRUE, ...) {
+autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
   .need_ggplot()
   Y <- object$panel$Y; W <- object$panel$W; pat <- object$pattern
   N <- nrow(Y); Tt <- ncol(Y)
@@ -168,7 +180,9 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
 
   t0_time <- if (!is.na(pat$block_t0)) times[pat$block_t0] else NA
 
-  # subtitle: the three penalties and how the SE was obtained.
+  # subtitle: the three penalties, and (only when show_se = TRUE) how the SE was
+  # obtained. By default the SE method is omitted, because this plot does not
+  # display standard errors -- see trop_event_study() for the uncertainty view.
   # Built as a plotmath expression so the lambda and centre-dot glyphs are drawn
   # from the symbol font. Embedding the raw Unicode characters in device text
   # triggers an "mbcsToSbcs" conversion failure under non-UTF-8 locales (e.g.
@@ -176,14 +190,19 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
   fmt <- function(z) if (is.infinite(z)) "Inf" else sprintf("%.2f", z)
   lam_txt <- sprintf("(unit %s, time %s, nn %s)",
                      fmt(lam$unit), fmt(lam$time), fmt(lam$nn))
-  se_txt <- switch(object$se.method %||% "none",
-    bootstrap = if (!is.null(object$n_boot))
-                  sprintf("Bootstrap SE (%d reps)", object$n_boot) else "Bootstrap SE",
-    jackknife = "Jackknife SE",
-    placebo   = "Placebo SE",
-    none      = "no SE",
-    sprintf("%s SE", object$se.method))
-  sub_txt <- substitute("Penalties " * lambda == lt %.% st, list(lt = lam_txt, st = se_txt))
+  if (isTRUE(show_se)) {
+    se_txt <- switch(object$se.method %||% "none",
+      bootstrap = if (!is.null(object$n_boot))
+                    sprintf("Bootstrap SE (%d reps)", object$n_boot) else "Bootstrap SE",
+      jackknife = "Jackknife SE",
+      placebo   = "Placebo SE",
+      none      = "no SE",
+      sprintf("%s SE", object$se.method))
+    sub_txt <- substitute("Penalties " * lambda == lt %.% st,
+                          list(lt = lam_txt, st = se_txt))
+  } else {
+    sub_txt <- substitute("Penalties " * lambda == lt, list(lt = lam_txt))
+  }
 
   p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data$time, y = .data$value,
                                          colour = .data$series)) +
@@ -201,8 +220,8 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
     # lines is the estimated effect; it is left unshaded so it is not mistaken
     # for a confidence band.
     p <- p +
-      ggplot2::geom_vline(xintercept = t0_time, linetype = "dotted",
-                          colour = "grey50")
+      ggplot2::geom_vline(xintercept = t0_time, linetype = "dashed",
+                          colour = "grey40", linewidth = 0.6)
   }
 
   if (show_weights && length(t_anchor)) {
@@ -244,7 +263,7 @@ plot.trop <- function(x, ...) {
 #' Event-study plot for a TROP fit
 #'
 #' Plots the per-period treatment effects from [trop_event_study()] against event
-#' time, with pointwise confidence-interval bars, a dashed line at zero, and a
+#' time, with pointwise confidence-interval bars, a solid line at zero, and a
 #' dotted line marking treatment onset. When pre-treatment periods are present
 #' they are drawn as distinct placebo / pre-trend points (open markers) so the
 #' pre-period profile can be read at a glance. The SE method is named at the end
@@ -284,7 +303,7 @@ autoplot.trop_event_study <- function(object, ...) {
 
   p <- ggplot2::ggplot(est, ggplot2::aes(x = .data$event_time,
                                          y = .data$estimate)) +
-    ggplot2::geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
+    ggplot2::geom_hline(yintercept = 0, linetype = "solid", colour = "grey60") +
     ggplot2::geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50")
 
   if (has_ci) {

@@ -301,13 +301,22 @@ panel_compare(ss, "y", "w", "id", "t")  # which estimator recovers it?
 ## Visualising a single fit
 
 `autoplot()` on a `trop` fit gives a synthetic-control-style trajectory plot: the
-treated-unit average against the estimated `Y(0)`, a dotted line marking the first
+treated-unit average against the estimated `Y(0)`, a dashed line marking the first
 treated period (the post-treatment gap between the two lines is the effect, left
 unshaded so it is not mistaken for a confidence band), and the TROP time weights
 drawn as a filled band along the bottom (in the style of `synthdid`'s time-weight
 strip). The band shows *time weights* — how much each period is leaned on — not
 observation counts; with `lambda_time = 0` the weights are uniform and the band is
 flat. Pass `show_weights = FALSE` to hide it.
+
+This is a **point-estimate** trajectory: it shows no standard errors or
+confidence intervals, and by default the subtitle reports only the selected
+penalties (pass `show_se = TRUE` to also note which SE method the fit used). To
+*visualise* the fit's uncertainty, use `trop_event_study()` and `autoplot()` on
+the result — that draws per-period estimates with pointwise confidence bars (see
+below). The `se=` choice on `trop()` still sets the standard error reported in
+`print(fit)`, `as_att()`, and the comparison forest plot; it just isn't drawn on
+this single-fit trajectory.
 
 ```r
 autoplot(trop(df, "y", "w", "id", "t"))
@@ -323,7 +332,7 @@ assumptions are introduced. With `pre_periods = TRUE` (the default) the
 pre-treatment gaps are returned as placebo / pre-trend points; a flat, near-zero
 pre-period profile supports the design. `autoplot()` draws the familiar
 event-study figure: per-period points with pointwise CI bars, pre-treatment
-points shown distinctly, a dotted line at treatment onset, and a dashed line at
+points shown distinctly, a dotted line at treatment onset, and a solid line at
 zero. Because the treated composition varies across bootstrap resamples and each
 event time leans on relatively few cells, the per-period intervals are wider than
 the overall ATT interval and are pointwise (not simultaneous).
@@ -348,6 +357,27 @@ estimate is to the penalties and where the data-driven choice lands.
 g <- trop_sensitivity(df, "y", "w", "id", "t")
 autoplot(g)
 g   # prints the CV-selected penalties and the ATT range over the grid
+```
+
+## Penalty ablation table
+
+`trop_ablation()` refits TROP under a sequence of penalty constraints — dropping
+the unit and/or time weights (`lambda_unit`/`lambda_time` set to zero) and/or the
+low-rank regression adjustment (`lambda_nn` set to infinity) — so you can read
+off how the ATT moves as the estimator is stripped back towards matrix completion
+and difference-in-differences. This is the robustness exercise behind Table 5 of
+the paper, returned as a **table rather than a plot**.
+
+Print it for a clean console table, or `format()` it to paste-ready LaTeX
+(booktabs, math-mode penalty headers — matching the paper's tables) or Markdown.
+The result is also a plain `data.frame`, so it works with `knitr::kable()`,
+`gt::gt()`, `flextable`, and friends.
+
+```r
+ab <- trop_ablation(df, "y", "w", "id", "t")   # add se = "jackknife" for SE + CI columns
+ab                                             # clean console table
+cat(format(ab, "latex"), sep = "\n")           # paste-ready LaTeX (needs \usepackage{booktabs})
+writeLines(format(ab, "markdown"))             # GitHub-flavoured Markdown
 ```
 
 ## Numerical agreement with the official software

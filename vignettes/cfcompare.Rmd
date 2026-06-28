@@ -124,7 +124,7 @@ fit$lambda
 ```
 
 Calling `autoplot()` on a single `trop` fit gives a synthetic-control-style
-trajectory: the treated-unit average against the estimated `Y(0)`, with a dotted
+trajectory: the treated-unit average against the estimated `Y(0)`, with a dashed
 line marking the first treated period (the post-treatment gap between the two
 lines is the effect, left unshaded so it is not mistaken for a confidence band).
 Because TROP carries explicit time weights, those weights are drawn as a filled
@@ -132,6 +132,14 @@ band along the bottom, in the style of `synthdid`'s time-weight strip. The band
 shows *time weights* — how much each period the counterfactual leans on — not
 observation counts; it is flat when `lambda_time = 0` (uniform weighting). Use
 `show_weights = FALSE` to drop the band.
+
+This trajectory shows only point estimates — no standard errors or confidence
+intervals — so by default the subtitle reports just the selected penalties (set
+`show_se = TRUE` to also note the SE method). To *see* the fit's uncertainty, use
+`trop_event_study()` and `autoplot()` on it, which draws per-period estimates with
+pointwise confidence bars (next section). The `se=` argument on `trop()` still
+controls the standard error shown in `print()`, `as_att()`, and the comparison
+forest plot.
 
 ```{r trop-autoplot, fig.width = 6, fig.height = 4.5, fig.alt = "TROP trajectory: observed vs. estimated Y(0) with the time-weight band along the bottom"}
 autoplot(fit)
@@ -146,7 +154,7 @@ rather than into one mean — so it adds no modelling assumptions beyond those o
 the fit itself. With `pre_periods = TRUE` (the default) the pre-treatment gaps
 come back as placebo / pre-trend points, and `autoplot()` draws the event-study
 figure: per-period points with pointwise confidence bars, pre-treatment points
-shown distinctly, a dotted line at treatment onset, and a dashed line at zero. A
+shown distinctly, a dotted line at treatment onset, and a solid line at zero. A
 flat pre-period profile and a clear post-treatment jump are the visual signature
 of a credible design. The per-period intervals are wider than the overall ATT
 interval and are pointwise rather than simultaneous.
@@ -174,6 +182,31 @@ With `lambda_nn = Inf` and uniform weights the low-rank term vanishes and the fi
 is ordinary two-way fixed effects; with a finite `lambda_nn` and uniform weights
 it is matrix completion; letting cross-validation pick the unit and time weights
 gives the full TROP estimator.
+
+### Penalty ablation table
+
+`trop_ablation()` runs that whole sweep of constraints for you — full TROP, then
+dropping the unit weights, the time weights, the regression adjustment, and the
+combinations that reduce to matrix completion and difference-in-differences — and
+returns it as a table (the robustness exercise behind the paper's Table 5)
+instead of a plot.
+
+```{r ablation}
+ab <- trop_ablation(df, "y", "w", "id", "t",
+                    control = trop_control(n_cv_cells = 12L, cv_cycles = 1L))
+ab
+```
+
+Print it for the console, or `format()` it to paste-ready LaTeX (booktabs) or
+Markdown for a paper or report; pass `se = "jackknife"` (or any [trop()] SE
+method) to add standard-error and confidence-interval columns. Because the result
+is an ordinary `data.frame`, it also drops straight into `knitr::kable()`,
+`gt::gt()`, and similar.
+
+```{r ablation-latex, eval = FALSE}
+cat(format(ab, "latex"), sep = "\n")     # needs \usepackage{booktabs}
+writeLines(format(ab, "markdown"))
+```
 
 ### Adding covariates
 

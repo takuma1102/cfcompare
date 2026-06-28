@@ -263,6 +263,13 @@ plot_trop_surfaces <- function(grid, which = c("both", "cv_loss", "att"),
   stopifnot(inherits(grid, "cf_trop_grid"))
   which <- match.arg(which)
 
+  # filled.contour() inherits the ambient par("mar"); a small left margin (from a
+  # prior plot, the size of the device / RStudio plot pane, or an export crop)
+  # then silently clips the y-axis tick labels and the rotated y-axis title.
+  # Guarantee enough room here and restore the caller's settings on exit.
+  op <- graphics::par(mar = c(5.1, 4.6, 4.1, 2.1))
+  on.exit(graphics::par(op), add = TRUE)
+
   ax <- .grid_axes(grid); x_pen <- ax[["x"]]; y_pen <- ax[["y"]]
   xcol <- paste0("lambda_", x_pen); ycol <- paste0("lambda_", y_pen)
 
@@ -292,9 +299,12 @@ plot_trop_surfaces <- function(grid, which = c("both", "cv_loss", "att"),
       plot.title = {
         # Supplying plot.title overrides filled.contour's default title() call,
         # so the main title and axis labels are re-drawn here together with a
-        # centred subtitle naming the penalty that is held fixed.
-        graphics::title(main = main, line = 1.6,
-                        xlab = .lambda_lab(x_pen), ylab = .lambda_lab(y_pen))
+        # centred subtitle naming the penalty that is held fixed. The main title
+        # is pulled in to line 1.6 to leave room for the subtitle; the axis
+        # labels are drawn in a separate call so they keep their standard
+        # placement (mgp line 3) instead of being dragged in next to the axis.
+        graphics::title(main = main, line = 1.6)
+        graphics::title(xlab = .lambda_lab(x_pen), ylab = .lambda_lab(y_pen))
         graphics::mtext(sub_expr, side = 3, line = 0.4, adj = 0.5, cex = 0.85)
       },
       key.title = graphics::title(main = key, cex.main = 0.8,

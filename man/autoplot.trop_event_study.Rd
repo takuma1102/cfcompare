@@ -16,7 +16,7 @@ A \code{ggplot} object.
 }
 \description{
 Plots the per-period treatment effects from \code{\link[=trop_event_study]{trop_event_study()}} against event
-time, with pointwise confidence-interval bars, a dashed line at zero, and a
+time, with pointwise confidence-interval bars, a solid line at zero, and a
 dotted line marking treatment onset. When pre-treatment periods are present
 they are drawn as distinct placebo / pre-trend points (open markers) so the
 pre-period profile can be read at a glance. The SE method is named at the end

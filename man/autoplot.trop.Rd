@@ -4,12 +4,16 @@
 \alias{autoplot.trop}
 \title{Synthetic-control-style trajectory plot for a single TROP fit}
 \usage{
-\method{autoplot}{trop}(object, show_weights = TRUE, ...)
+\method{autoplot}{trop}(object, show_weights = TRUE, show_se = FALSE, ...)
 }
 \arguments{
 \item{object}{A \code{trop} fit from \code{\link[=trop]{trop()}}.}
 
 \item{show_weights}{Logical; draw the time-weight band along the bottom.}
+
+\item{show_se}{Logical; append the fit's standard-error method to the subtitle.
+Defaults to \code{FALSE} because this plot does not display standard errors --
+see \code{\link[=trop_event_study]{trop_event_study()}} for the uncertainty visualisation.}
 
 \item{...}{Unused.}
 }
@@ -18,7 +22,7 @@ A \code{ggplot} object.
 }
 \description{
 Draws the treated-unit average observed path against the estimated untreated
-(counterfactual) path, in the style of the \pkg{synthdid} plot: a dotted line
+(counterfactual) path, in the style of the \pkg{synthdid} plot: a dashed line
 marks the first treated period, the post-treatment gap between the two lines is
 the estimated effect, and -- since TROP carries explicit time weights -- the
 time weights \eqn{\theta_s = \exp(-\lambda_{time} |t - s|)} are drawn as a
@@ -27,10 +31,23 @@ show which periods the counterfactual leans on. The band shows weights, not
 observation counts; heights are scaled to the largest weight, and with
 \eqn{\lambda_{time} = 0} the weights are uniform and the band is flat.
 }
+\details{
+This is a \emph{point-estimate} trajectory: it shows no standard errors or
+confidence intervals (the post-treatment gap is left unshaded so it is not
+mistaken for a confidence band). To visualise the fit's uncertainty, use
+\code{\link[=trop_event_study]{trop_event_study()}} and call \code{\link[=autoplot]{autoplot()}} on the result, which draws
+per-period estimates with pointwise confidence bars. Accordingly the subtitle
+reports only the selected penalties by default; set \code{show_se = TRUE} to also
+note which standard-error method the fit used.
+}
 \examples{
 \donttest{
 df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 3, seed = 1)
 autoplot(trop(df, "y", "w", "id", "t",
               control = trop_control(n_cv_cells = 8L, cv_cycles = 1L)))
 }
+}
+\seealso{
+\code{\link[=trop_event_study]{trop_event_study()}} and its \code{autoplot()} method for per-period
+effects with confidence bars.
 }
