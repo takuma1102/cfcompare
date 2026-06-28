@@ -30,3 +30,27 @@ test_that("rmse_curves bundles both sweeps", {
   expect_s3_class(g$n_control, "cf_rmse_curve")
   expect_s3_class(g$n_pre, "cf_rmse_curve")
 })
+
+test_that("rmse_curve can sweep the number of treated units", {
+  cc <- rmse_curve("n_treated", values = c(2, 4), n_runs = 2,
+                   methods = c("DID", "TROP"), n_control = 24,
+                   n_pre = 8, n_post = 4,
+                   control = trop_control(n_cv_cells = 10L, cv_cycles = 1L),
+                   seed = 1)
+  expect_s3_class(cc, "cf_rmse_curve")
+  expect_setequal(unique(cc$x), c(2, 4))
+  expect_identical(attr(cc, "vary"), "n_treated")
+  expect_match(attr(cc, "xlab"), "treated units")
+})
+
+test_that("rmse_curve can sweep the number of post-treatment periods", {
+  cc <- rmse_curve("n_post", values = c(3, 5), n_runs = 2,
+                   methods = c("DID", "TROP"), n_control = 24,
+                   n_treated = 4, n_pre = 8,
+                   control = trop_control(n_cv_cells = 10L, cv_cycles = 1L),
+                   seed = 1)
+  expect_s3_class(cc, "cf_rmse_curve")
+  expect_setequal(unique(cc$x), c(3, 5))
+  expect_identical(attr(cc, "vary"), "n_post")
+  expect_match(attr(cc, "xlab"), "post-treatment periods")
+})

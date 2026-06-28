@@ -1,4 +1,4 @@
-# cfcompare 0.1.0.9000
+# cfcompare 0.1.0.9001
 
 * Native R implementations of the Triply
   RObust Panel (TROP) estimator of Athey, Imbens, Qu & Viviano (2026).
@@ -12,3 +12,7 @@
   reads as time weights rather than observation counts. The band is shown for
   uniform weights too (`lambda_time = 0`, flat) and can be hidden with
   `show_weights = FALSE`.
+* `compare_se_modes()` compares the TROP bootstrap, jackknife and placebo
+  standard errors on a single fit: the cross-validated penalties are chosen once
+  and reused, so the point estimate is identical across rows and only the
+  uncertainty differs (the same fixed-penalty pattern as `trop_ablation()`).

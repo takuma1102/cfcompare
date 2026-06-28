@@ -47,12 +47,15 @@
 #' @param Y N x T outcome matrix.
 #' @param W N x T 0/1 treatment matrix (1 = actively treated cell).
 #' @param treated_units Integer row indices of the treated units, used to anchor
-#'   the unit weights.
+#'   the unit weights. Defaults to `NULL`, in which case the treated rows are
+#'   inferred from `W` as the rows with at least one treated cell.
 #' @param lambda_unit,lambda_time Non-negative decay parameters for the unit and
 #'   time weights.
 #' @param lambda_nn Nuclear-norm penalty; use `Inf` to drop the low-rank term.
 #' @param treated_periods Number of final columns treated as the post block, used
-#'   to build the pre-period mask and the time-distance centre.
+#'   to build the pre-period mask and the time-distance centre. Defaults to
+#'   `NULL`, in which case it is inferred from `W` as the number of periods in
+#'   which any treated unit is active.
 #' @param control A list of solver controls from [trop_control()].
 #' @return A single numeric ATT estimate.
 #' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
@@ -66,18 +69,30 @@
 #'   W[df$id[k], df$t[k]] <- df$w[k] }
 #' tu <- which(rowSums(W) > 0)
 #' trop_matrix(Y, W, tu, 0.1, 0.1, Inf, treated_periods = 4)
-trop_matrix <- function(Y, W, treated_units,
+#'
+#' # treated_units and treated_periods are inferred from W when omitted, so the
+#' # matrices produced by panel_matrices() can be fed in directly.
+#' pm <- panel_matrices(df, "y", "w", "id", "t")
+#' trop_matrix(pm$Y, pm$W, lambda_unit = 0.1, lambda_time = 0.1, lambda_nn = Inf)
+trop_matrix <- function(Y, W, treated_units = NULL,
                         lambda_unit, lambda_time, lambda_nn,
-                        treated_periods, control = trop_control()) {
+                        treated_periods = NULL, control = trop_control()) {
   Y <- as.matrix(Y); W <- as.matrix(W)
   if (!identical(dim(Y), dim(W))) stop("Y and W must have the same dimensions.")
   N <- nrow(Y); Tt <- ncol(Y)
+  if (!any(W == 1)) stop("W contains no treated cells.")
+
+  # Infer the treated rows and the post-block width from W when not supplied.
+  if (is.null(treated_units))
+    treated_units <- which(rowSums(W) > 0)
+  if (is.null(treated_periods))
+    treated_periods <- sum(colSums(W[treated_units, , drop = FALSE]) > 0)
+
   if (treated_periods <= 0 || treated_periods >= Tt)
     stop("treated_periods must be in 1..T-1.")
   if (length(treated_units) == 0L) stop("treated_units must be non-empty.")
   if (lambda_unit < 0 || lambda_time < 0)
     stop("lambda_unit and lambda_time must be non-negative.")
-  if (!any(W == 1)) stop("W contains no treated cells.")
 
   wmat <- .trop_reference_weights(Y, treated_units, lambda_unit, lambda_time,
                                   treated_periods)

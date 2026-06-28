@@ -5,7 +5,7 @@
 \title{Estimation-RMSE curve over one design dimension}
 \usage{
 rmse_curve(
-  vary = c("n_control", "n_pre"),
+  vary = c("n_control", "n_pre", "n_treated", "n_post"),
   values = NULL,
   n_runs = 500L,
   methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
@@ -28,12 +28,14 @@ rmse_curve(
 )
 }
 \arguments{
-\item{vary}{Which dimension to sweep: \code{"n_control"} or \code{"n_pre"}.}
+\item{vary}{Which dimension to sweep: \code{"n_control"}, \code{"n_pre"},
+\code{"n_treated"} or \code{"n_post"}.}
 
 \item{values}{Integer vector of values for the swept dimension. Defaults to
-\code{seq(20, 45, by = 5)} for control units and \code{seq(5, 38, by = 2)} for
-pre-periods. Each value is an actual measured point (its own Monte Carlo);
-pass a denser/wider grid for smoother or longer curves.}
+\code{seq(20, 45, by = 5)} for control units, \code{seq(5, 38, by = 2)} for
+pre-periods, and \code{seq(2, 12, by = 2)} for treated units or post-periods.
+Each value is an actual measured point (its own Monte Carlo); pass a
+denser/wider grid for smoother or longer curves.}
 
 \item{n_runs}{Monte Carlo replications per value (higher = smoother; the paper
 uses ~1000). Default 500. \strong{Note:} with the dense default grid and six
@@ -88,8 +90,9 @@ A \code{cf_rmse_curve} (a \code{data.frame}) with columns \code{method}, \code{x
 \code{attr(., "vary")}.
 }
 \description{
-Sweeps one design dimension -- the number of control units (\code{"n_control"}) or
-the number of pre-treatment periods (\code{"n_pre"}) -- and, at each value, runs a
+Sweeps one design dimension -- the number of control units (\code{"n_control"}),
+pre-treatment periods (\code{"n_pre"}), treated units (\code{"n_treated"}) or
+post-treatment periods (\code{"n_post"}) -- and, at each value, runs a
 semi-synthetic Monte Carlo: panels are drawn from a latent factor model in
 which treatment is selected on the factor loadings (so plain DID/TWFE is
 biased), a known constant effect \code{att} is imposed, every estimator is run, and

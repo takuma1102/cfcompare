@@ -7,11 +7,11 @@
 trop_matrix(
   Y,
   W,
-  treated_units,
+  treated_units = NULL,
   lambda_unit,
   lambda_time,
   lambda_nn,
-  treated_periods,
+  treated_periods = NULL,
   control = trop_control()
 )
 }
@@ -21,7 +21,8 @@ trop_matrix(
 \item{W}{N x T 0/1 treatment matrix (1 = actively treated cell).}
 
 \item{treated_units}{Integer row indices of the treated units, used to anchor
-the unit weights.}
+the unit weights. Defaults to \code{NULL}, in which case the treated rows are
+inferred from \code{W} as the rows with at least one treated cell.}
 
 \item{lambda_unit, lambda_time}{Non-negative decay parameters for the unit and
 time weights.}
@@ -29,7 +30,9 @@ time weights.}
 \item{lambda_nn}{Nuclear-norm penalty; use \code{Inf} to drop the low-rank term.}
 
 \item{treated_periods}{Number of final columns treated as the post block, used
-to build the pre-period mask and the time-distance centre.}
+to build the pre-period mask and the time-distance centre. Defaults to
+\code{NULL}, in which case it is inferred from \code{W} as the number of periods in
+which any treated unit is active.}
 
 \item{control}{A list of solver controls from \code{\link[=trop_control]{trop_control()}}.}
 }
@@ -61,6 +64,11 @@ for (k in seq_len(nrow(df))) { Y[df$id[k], df$t[k]] <- df$y[k]
   W[df$id[k], df$t[k]] <- df$w[k] }
 tu <- which(rowSums(W) > 0)
 trop_matrix(Y, W, tu, 0.1, 0.1, Inf, treated_periods = 4)
+
+# treated_units and treated_periods are inferred from W when omitted, so the
+# matrices produced by panel_matrices() can be fed in directly.
+pm <- panel_matrices(df, "y", "w", "id", "t")
+trop_matrix(pm$Y, pm$W, lambda_unit = 0.1, lambda_time = 0.1, lambda_nn = Inf)
 }
 \references{
 Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).

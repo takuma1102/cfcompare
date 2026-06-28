@@ -172,6 +172,75 @@ print.cf_trop_grid <- function(x, digits = 4, ...) {
   invisible(x)
 }
 
+#' Surface matrix from a TROP penalty-sensitivity grid
+#'
+#' Reshapes a long [trop_sensitivity()] grid into a wide matrix of one quantity
+#' --- the cross-validation loss or the ATT --- laid out over the two swept
+#' penalties (see the `axes` argument of [trop_sensitivity()]). Rows are the
+#' y-axis penalty, columns the x-axis penalty; the matrix `dimnames` are named
+#' after the two penalty columns so the layout is self-describing. This is the
+#' same reshape [plot_trop_surfaces()] performs internally, exposed so the
+#' surfaces can be inspected or post-processed without re-deriving them with
+#' `xtabs()`.
+#'
+#' @param grid A `cf_trop_grid` from [trop_sensitivity()].
+#' @param value Which quantity to lay out: `"cv_loss"` (default) or `"att"`.
+#' @return A numeric matrix (y-axis penalty in rows, x-axis penalty in columns).
+#' @seealso [trop_sensitivity()], [selected_lambda()], [plot_trop_surfaces()]
+#' @examples
+#' \donttest{
+#' df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
+#' g <- trop_sensitivity(df, "y", "w", "id", "t",
+#'                       lambda_time = c(0, 0.25, 1),
+#'                       control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#' surface_matrix(g, "cv_loss")
+#' surface_matrix(g, "att")
+#' }
+#' @export
+surface_matrix <- function(grid, value = c("cv_loss", "att")) {
+  stopifnot(inherits(grid, "cf_trop_grid"))
+  value <- match.arg(value)
+  ax <- .grid_axes(grid); x_pen <- ax[["x"]]; y_pen <- ax[["y"]]
+  xcol <- paste0("lambda_", x_pen); ycol <- paste0("lambda_", y_pen)
+  yv <- sort(unique(grid[[ycol]]))
+  xv <- sort(unique(grid[[xcol]]))
+  m <- matrix(NA_real_, length(yv), length(xv),
+              dimnames = stats::setNames(
+                list(as.character(yv), as.character(xv)), c(ycol, xcol)))
+  ix <- cbind(match(grid[[ycol]], yv), match(grid[[xcol]], xv))
+  m[ix] <- grid[[value]]
+  m
+}
+
+#' CV-selected penalties from a TROP penalty-sensitivity grid
+#'
+#' Returns the cross-validation-selected penalties of a [trop_sensitivity()]
+#' grid --- the grid cell minimising the CV loss --- as a `list(time=, unit=,
+#' nn=)`, the same shape [trop()] accepts for its `lambda` argument. So the
+#' data-driven choice on a grid can be fed straight back into a fit, e.g.
+#' `trop(..., lambda = selected_lambda(g))`, without digging the values out of
+#' `attr(g, "selected")` by hand.
+#'
+#' @param grid A `cf_trop_grid` from [trop_sensitivity()].
+#' @return A named list with the selected `time`, `unit` and `nn` penalties. The
+#'   full selected row (including the ATT and CV loss there) remains available in
+#'   `attr(grid, "selected")`.
+#' @seealso [trop_sensitivity()], [surface_matrix()], [trop()]
+#' @examples
+#' \donttest{
+#' df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
+#' g <- trop_sensitivity(df, "y", "w", "id", "t",
+#'                       lambda_time = c(0, 0.25, 1),
+#'                       control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#' selected_lambda(g)
+#' }
+#' @export
+selected_lambda <- function(grid) {
+  stopifnot(inherits(grid, "cf_trop_grid"))
+  s <- attr(grid, "selected")
+  list(time = s$lambda_time, unit = s$lambda_unit, nn = s$lambda_nn)
+}
+
 #' Heatmap of the TROP penalty-sensitivity grid
 #'
 #' Cells are coloured by cross-validation loss (darker = better out-of-sample
@@ -273,15 +342,13 @@ plot_trop_surfaces <- function(grid, which = c("both", "cv_loss", "att"),
   ax <- .grid_axes(grid); x_pen <- ax[["x"]]; y_pen <- ax[["y"]]
   xcol <- paste0("lambda_", x_pen); ycol <- paste0("lambda_", y_pen)
 
-  # Reshape the long grid into (y-axis x x-axis) matrices without a formula, so
-  # there are no undefined-global NOTEs.
+  # Reshape the long grid into (y-axis x x-axis) matrices. surface_matrix() does
+  # the same reshape that is exposed to users; the numeric axis vectors yv / xv
+  # are kept separately for filled.contour()'s axes.
   yv <- sort(unique(grid[[ycol]]))
   xv <- sort(unique(grid[[xcol]]))
-  cv_surface  <- matrix(NA_real_, length(yv), length(xv), dimnames = list(yv, xv))
-  att_surface <- cv_surface
-  ix <- cbind(match(grid[[ycol]], yv), match(grid[[xcol]], xv))
-  cv_surface[ix]  <- grid$cv_loss
-  att_surface[ix] <- grid$att
+  cv_surface  <- surface_matrix(grid, "cv_loss")
+  att_surface <- surface_matrix(grid, "att")
 
   # penalty held fixed across the 2-D sweep, shown as a centred subtitle (only
   # two of the three lambdas vary within a single surface).

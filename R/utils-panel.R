@@ -50,6 +50,46 @@
   list(Y = Y, W = W, units = units, times = times)
 }
 
+#' Reshape a long panel into TROP matrices
+#'
+#' Converts a long panel `data.frame` into the `N x T` outcome (`Y`) and
+#' treatment (`W`) matrices used by [trop_matrix()], and reports the treated rows
+#' and the width of the treated block. It is the data-frame-to-matrix companion
+#' to [trop_matrix()]: rather than building `Y`, `W`, `treated_units` and
+#' `treated_periods` by hand, call `panel_matrices()` and pass the pieces
+#' straight through.
+#'
+#' @param data A long `data.frame`/`tibble` with one row per unit-time cell.
+#' @param outcome,treatment,unit,time Column names (strings). `treatment` must be
+#'   a 0/1 indicator.
+#' @return A list with components:
+#'   \describe{
+#'     \item{`Y`}{`N x T` outcome matrix (rows = units, columns = times).}
+#'     \item{`W`}{`N x T` 0/1 treatment matrix on the same grid.}
+#'     \item{`units`,`times`}{the sorted unit and time labels.}
+#'     \item{`treated_units`}{integer row indices of units with any treated cell.}
+#'     \item{`treated_periods`}{number of periods in which any treated unit is
+#'       active, i.e. the width of the post block.}
+#'   }
+#' @seealso [trop_matrix()], [trop()]
+#' @export
+#' @examples
+#' df <- sim_panel(N = 15, T = 12, n_treated = 3, t0 = 9, att = 2, seed = 1)
+#' pm <- panel_matrices(df, "y", "w", "id", "t")
+#' str(pm)
+#' # Feed straight into the matrix-in entry point (treated rows/periods inferred).
+#' trop_matrix(pm$Y, pm$W, lambda_unit = 0.1, lambda_time = 0.1, lambda_nn = Inf)
+panel_matrices <- function(data, outcome, treatment, unit, time) {
+  pm <- .panel_to_matrices(data, outcome, treatment, unit, time)
+  tu <- which(rowSums(pm$W) > 0)
+  tp <- sum(colSums(pm$W[tu, , drop = FALSE]) > 0)
+  list(
+    Y = pm$Y, W = pm$W,
+    units = pm$units, times = pm$times,
+    treated_units = tu, treated_periods = tp
+  )
+}
+
 #' Reshape long covariate columns into a list of N x T matrices
 #'
 #' Aligns each covariate column to the same unit/time grid as the outcome and

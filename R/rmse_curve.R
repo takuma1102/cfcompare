@@ -99,8 +99,9 @@
 
 #' Estimation-RMSE curve over one design dimension
 #'
-#' Sweeps one design dimension -- the number of control units (`"n_control"`) or
-#' the number of pre-treatment periods (`"n_pre"`) -- and, at each value, runs a
+#' Sweeps one design dimension -- the number of control units (`"n_control"`),
+#' pre-treatment periods (`"n_pre"`), treated units (`"n_treated"`) or
+#' post-treatment periods (`"n_post"`) -- and, at each value, runs a
 #' semi-synthetic Monte Carlo: panels are drawn from a latent factor model in
 #' which treatment is selected on the factor loadings (so plain DID/TWFE is
 #' biased), a known constant effect `att` is imposed, every estimator is run, and
@@ -113,11 +114,13 @@
 #' panel. To run a curve on your own data, draw panels with [sim_semisynthetic()]
 #' and call [panel_compare()] in a loop.
 #'
-#' @param vary Which dimension to sweep: `"n_control"` or `"n_pre"`.
+#' @param vary Which dimension to sweep: `"n_control"`, `"n_pre"`,
+#'   `"n_treated"` or `"n_post"`.
 #' @param values Integer vector of values for the swept dimension. Defaults to
-#'   `seq(20, 45, by = 5)` for control units and `seq(5, 38, by = 2)` for
-#'   pre-periods. Each value is an actual measured point (its own Monte Carlo);
-#'   pass a denser/wider grid for smoother or longer curves.
+#'   `seq(20, 45, by = 5)` for control units, `seq(5, 38, by = 2)` for
+#'   pre-periods, and `seq(2, 12, by = 2)` for treated units or post-periods.
+#'   Each value is an actual measured point (its own Monte Carlo); pass a
+#'   denser/wider grid for smoother or longer curves.
 #' @param n_runs Monte Carlo replications per value (higher = smoother; the paper
 #'   uses ~1000). Default 500. **Note:** with the dense default grid and six
 #'   estimators this is a large simulation (thousands of fits per panel); reduce
@@ -165,7 +168,7 @@
 #'                  control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
 #' autoplot(cc)
 #' }
-rmse_curve <- function(vary = c("n_control", "n_pre"),
+rmse_curve <- function(vary = c("n_control", "n_pre", "n_treated", "n_post"),
                        values = NULL, n_runs = 500L,
                        methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
                        exclude = NULL,
@@ -186,8 +189,11 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
     methods, exclude,
     c("DID", "SDID", "SC", "MC", "DIFP", "TROP", "gsynth", "augsynth", "CS"))
   if (is.null(values)) {
-    values <- if (vary == "n_control") seq(20L, 45L, by = 5L)
-              else seq(5L, 38L, by = 2L)
+    values <- switch(vary,
+      n_control = seq(20L, 45L, by = 5L),
+      n_pre     = seq(5L, 38L, by = 2L),
+      n_treated = seq(2L, 12L, by = 2L),
+      n_post    = seq(2L, 12L, by = 2L))
   }
   values <- sort(unique(as.integer(values)))
 
@@ -196,11 +202,13 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
   # whether tasks run sequentially or in parallel.
   one_task <- function(task) {
     v <- task$v; r <- task$r
-    nc <- if (vary == "n_control") v else n_control
-    np <- if (vary == "n_pre") v else n_pre
+    nc  <- if (vary == "n_control") v else n_control
+    np  <- if (vary == "n_pre")     v else n_pre
+    nt  <- if (vary == "n_treated") v else n_treated
+    npo <- if (vary == "n_post")    v else n_post
     df <- .rmse_curve_gen(seed * 100000L + v * 100L + r,
-                          n_control = nc, n_treated = n_treated,
-                          n_pre = np, n_post = n_post,
+                          n_control = nc, n_treated = nt,
+                          n_pre = np, n_post = npo,
                           rank = rank, att = att, noise = noise,
                           ar = ar, trend_sd = trend_sd)
     cmp <- tryCatch(
@@ -257,8 +265,11 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
   }
   out <- do.call(rbind, rows)
   attr(out, "vary") <- vary
-  attr(out, "xlab") <- if (vary == "n_control") "Number of control units"
-                       else "Number of pre-treatment periods"
+  attr(out, "xlab") <- switch(vary,
+    n_control = "Number of control units",
+    n_pre     = "Number of pre-treatment periods",
+    n_treated = "Number of treated units",
+    n_post    = "Number of post-treatment periods")
   attr(out, "att") <- att
   class(out) <- c("cf_rmse_curve", "data.frame")
   out

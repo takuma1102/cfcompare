@@ -156,6 +156,32 @@ print.cf_att_tbl <- function(x, digits = 4, ...) {
 
 # ---- tidiers ----------------------------------------------------------------
 
+# Canonical column order of the cf_att_tbl schema.
+.att_schema <- c("method", "estimate", "std.error", "conf.low", "conf.high",
+                 "n_treated_cells", "n_treated_units", "outcome", "engine",
+                 "rank", "note")
+
+# Row-bind a list of ATT data frames into one `cf_att_tbl`, aligning columns
+# (any missing column is filled with NA) and keeping the canonical schema order
+# for known columns. NULL / empty parts are dropped. This is the shared backbone
+# of `as_att.list()` and `bind_att()`, so stacking tables is robust to inputs
+# that carry extra or missing columns.
+.rbind_att <- function(parts) {
+  parts <- lapply(parts, function(p) if (is.null(p)) NULL else as.data.frame(p))
+  parts <- Filter(function(p) !is.null(p) && nrow(p) > 0L, parts)
+  if (!length(parts)) return(NULL)
+  all_cols <- unique(unlist(lapply(parts, names), use.names = FALSE))
+  ordered  <- c(intersect(.att_schema, all_cols), setdiff(all_cols, .att_schema))
+  parts <- lapply(parts, function(d) {
+    for (m in setdiff(ordered, names(d))) d[[m]] <- NA
+    d[ordered]
+  })
+  out <- do.call(rbind, parts)
+  rownames(out) <- NULL
+  class(out) <- c("cf_att_tbl", "data.frame")
+  out
+}
+
 #' Coerce estimator output to the cfcompare ATT schema
 #'
 #' Brings the output of [trop()], [panel_compare()], a \pkg{synthdid} estimate,
@@ -230,10 +256,16 @@ as_att.augsynth <- function(x, method = "augsynth",
 #' @export
 as_att.list <- function(x, ...) {
   parts <- lapply(x, as_att, ...)
-  out <- do.call(rbind, parts)
-  rownames(out) <- NULL
-  class(out) <- c("cf_att_tbl", "data.frame")
-  out
+  nms <- names(x)
+  if (!is.null(nms)) {
+    # use list names as method labels, but only for single-row parts (a name
+    # cannot sensibly relabel a multi-row table such as a panel_compare result).
+    parts <- Map(function(p, nm) {
+      if (!is.na(nm) && nzchar(nm) && nrow(p) == 1L) p$method <- nm
+      p
+    }, parts, nms)
+  }
+  .rbind_att(parts)
 }
 
 #' @export
@@ -252,4 +284,55 @@ as_att.default <- function(x, method = NA_character_,
   )
   class(row) <- c("cf_att_tbl", "data.frame")
   row
+}
+
+#' Stack ATT results into one comparison table
+#'
+#' Row-binds several ATT results --- [trop()] fits, [panel_compare()] results,
+#' \pkg{synthdid} estimates, existing `cf_att_tbl`s, or anything [as_att()]
+#' understands --- into a single `cf_att_tbl` ready for [autoplot()] or
+#' [plot_counterfactual()]. Each argument is passed through [as_att()] first, so
+#' multi-row inputs (e.g. a `panel_compare()` result) keep all their rows, and
+#' columns are aligned automatically. This replaces the manual
+#' `rbind(as.data.frame(...), ...)` + `class(...) <- "cf_att_tbl"` dance.
+#'
+#' Names given to the arguments become `method` labels, overriding the label
+#' already on a *single-row* result; a name on a multi-row input is ignored with
+#' a warning (it cannot sensibly relabel several methods at once). For per-object
+#' control of other fields such as `outcome`, coerce that object with [as_att()]
+#' first and pass the result in unnamed.
+#'
+#' @param ... Objects coercible by [as_att()], optionally named to set the
+#'   `method` label.
+#' @return A `cf_att_tbl` (a `data.frame`) with the inputs stacked row-wise.
+#' @seealso [as_att()], [panel_compare()], [compare_se_modes()]
+#' @examples
+#' df <- sim_panel(N = 25, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
+#' ctrl <- trop_control(n_cv_cells = 8L, cv_cycles = 1L)
+#' f_pooled   <- trop(df, "y", "w", "id", "t", anchor = "pooled",
+#'                    se = "none", control = ctrl)
+#' f_per_cell <- trop(df, "y", "w", "id", "t", anchor = "per_cell",
+#'                    se = "none", control = ctrl)
+#' bind_att(pooled = f_pooled, per_cell = f_per_cell)
+#' @export
+bind_att <- function(...) {
+  args <- list(...)
+  if (!length(args)) stop("bind_att() needs at least one object.", call. = FALSE)
+  nms <- names(args)
+  if (is.null(nms)) nms <- rep("", length(args))
+  parts <- vector("list", length(args))
+  for (i in seq_along(args)) {
+    a <- as_att(args[[i]])
+    if (nzchar(nms[i])) {
+      if (nrow(a) == 1L) {
+        a$method <- nms[i]
+      } else {
+        warning("bind_att(): name \"", nms[i],
+                "\" ignored for a multi-row result (", nrow(a), " rows).",
+                call. = FALSE)
+      }
+    }
+    parts[[i]] <- a
+  }
+  .rbind_att(parts)
 }

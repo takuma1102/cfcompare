@@ -16,20 +16,49 @@
 #' @param att True treatment effect added to treated cells.
 #' @param noise Standard deviation of idiosyncratic noise.
 #' @param seed Optional RNG seed.
+#' @param n_cov Number of time-varying covariates to generate (default `0`,
+#'   none). Generated covariates are cell-level standard-normal draws whose
+#'   linear index is part of the untreated potential outcome `Y(0)`, matching the
+#'   additive covariate model of [trop()] (`L = X.phi + R`); pass their names to
+#'   `covariates` in [trop()] / [panel_compare()] to recover the coefficients.
+#'   Defaults to `length(phi)` when `phi` is supplied.
+#' @param phi Optional numeric coefficient vector for the covariates (length
+#'   `n_cov`). When `NULL` and `n_cov > 0`, coefficients are drawn from a
+#'   standard normal. The coefficients actually used are returned on the
+#'   `"phi"` attribute of the result.
 #' @return A long `data.frame` with columns `id`, `t`, `y`, `w`, and the noiseless
-#'   counterfactual `y0` (useful for evaluating estimators).
+#'   counterfactual `y0` (useful for evaluating estimators). When `n_cov > 0` it
+#'   additionally carries covariate columns `x1`, ..., `x{n_cov}`, and the true
+#'   coefficients are stored on `attr(., "phi")`.
 #' @examples
 #' df <- sim_panel(N = 30, T = 15, n_treated = 5, t0 = 11, seed = 42)
 #' head(df)
+#'
+#' # Two covariates with known coefficients, recoverable by trop(covariates=):
+#' dc <- sim_panel(N = 30, T = 12, n_treated = 4, t0 = 9,
+#'                 n_cov = 2, phi = c(1.2, -0.7), seed = 1)
+#' attr(dc, "phi")
 #' @export
 sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
-                      rank = 3L, att = 1, noise = 0.5, seed = NULL) {
+                      rank = 3L, att = 1, noise = 0.5, seed = NULL,
+                      n_cov = 0L, phi = NULL) {
   if (!is.null(seed)) {
     old <- .Random.seed_safe(); on.exit(.Random.seed_restore(old), add = TRUE)
     set.seed(seed)
   }
   if (is.null(t0)) t0 <- floor(0.75 * T) + 1L
   stopifnot(n_treated < N, t0 >= 2, t0 <= T)
+
+  # resolve covariate count / coefficients
+  if (!is.null(phi)) {
+    phi <- as.numeric(phi)
+    if (missing(n_cov) || n_cov == 0L) n_cov <- length(phi)
+    if (length(phi) != n_cov)
+      stop("`phi` must have length `n_cov` (", n_cov, ").", call. = FALSE)
+  }
+  n_cov <- as.integer(n_cov)
+  if (n_cov < 0L) stop("`n_cov` must be non-negative.", call. = FALSE)
+  if (n_cov > 0L && is.null(phi)) phi <- stats::rnorm(n_cov)
 
   # two-way fixed effects
   alpha <- stats::rnorm(N, sd = 1)
@@ -46,6 +75,16 @@ sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
   noise_mat <- matrix(stats::rnorm(N * T, sd = noise), N, T)
   Y0_obs <- Y0 + noise_mat
 
+  # covariates: cell-level regressors whose linear index X.phi is part of Y(0)
+  # (both the observed outcome and the counterfactual y0 carry it), so trop()
+  # with `covariates=` recovers `phi`.
+  Xlist <- NULL
+  if (n_cov > 0L) {
+    Xlist <- lapply(seq_len(n_cov), function(k) matrix(stats::rnorm(N * T), N, T))
+    Xsig <- Reduce(`+`, Map(function(Xk, b) b * Xk, Xlist, phi))
+    Y0_obs <- Y0_obs + Xsig
+  }
+
   W <- matrix(0, N, T)
   treated_units <- seq_len(n_treated)
   W[treated_units, t0:T] <- 1
@@ -59,7 +98,12 @@ sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
     y0 = as.numeric(Y0_obs),
     stringsAsFactors = FALSE
   )
-  df[order(df$id, df$t), ]
+  if (n_cov > 0L)
+    for (k in seq_len(n_cov)) df[[paste0("x", k)]] <- as.numeric(Xlist[[k]])
+  df <- df[order(df$id, df$t), ]
+  if (n_cov > 0L)
+    attr(df, "phi") <- stats::setNames(phi, paste0("x", seq_len(n_cov)))
+  df
 }
 
 #' Build a semi-synthetic panel from real data
@@ -169,4 +213,45 @@ sim_semisynthetic <- function(data, outcome, unit, time,
     stringsAsFactors = FALSE
   )
   df[order(df$id, df$t), ]
+}
+
+#' True ATT of a (semi-)synthetic panel
+#'
+#' Convenience accessor for the ground-truth average treatment effect on the
+#' treated of a simulated panel. It reads the per-cell true effect --- the `tau`
+#' column produced by [sim_semisynthetic()], or `y - y0` for a [sim_panel()]
+#' panel --- and averages it over the actively treated cells, giving the number
+#' estimators are trying to recover. Pair it with [panel_compare()] or
+#' [panel_rmse()] to score estimates against the truth without re-deriving it by
+#' hand.
+#'
+#' @param data A long `data.frame` with a treatment indicator and either a `tau`
+#'   column (true per-cell effect) or both `y` and `y0` columns.
+#' @param treatment Name of the 0/1 treatment column (default `"w"`).
+#' @param tau Name of the true-effect column (default `"tau"`). When that column
+#'   is absent the per-cell effect is taken as `y - y0`.
+#' @return A single numeric: the true ATT averaged over treated cells.
+#' @seealso [sim_semisynthetic()], [sim_panel()], [panel_compare()]
+#' @examples
+#' real <- sim_panel(N = 40, T = 18, n_treated = 0L, att = 0, seed = 1)
+#' ss <- sim_semisynthetic(real, "y", "id", "t",
+#'                         n_treated = 6, t0 = 14, att = 3, seed = 2)
+#' true_att(ss)   # 3
+#' @export
+true_att <- function(data, treatment = "w", tau = "tau") {
+  data <- as.data.frame(data)
+  if (!treatment %in% names(data))
+    stop("Treatment column `", treatment, "` not found.", call. = FALSE)
+  w <- data[[treatment]]
+  if (tau %in% names(data)) {
+    eff <- data[[tau]]
+  } else if (all(c("y", "y0") %in% names(data))) {
+    eff <- data[["y"]] - data[["y0"]]
+  } else {
+    stop("Need a `", tau, "` column, or both `y` and `y0`, to compute the ",
+         "true ATT.", call. = FALSE)
+  }
+  treated <- w == 1 & is.finite(eff)
+  if (!any(treated)) stop("No treated cells (", treatment, " == 1).", call. = FALSE)
+  mean(eff[treated])
 }

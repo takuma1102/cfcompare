@@ -12,7 +12,9 @@ sim_panel(
   rank = 3L,
   att = 1,
   noise = 0.5,
-  seed = NULL
+  seed = NULL,
+  n_cov = 0L,
+  phi = NULL
 )
 }
 \arguments{
@@ -31,10 +33,24 @@ sim_panel(
 \item{noise}{Standard deviation of idiosyncratic noise.}
 
 \item{seed}{Optional RNG seed.}
+
+\item{n_cov}{Number of time-varying covariates to generate (default \code{0},
+none). Generated covariates are cell-level standard-normal draws whose
+linear index is part of the untreated potential outcome \code{Y(0)}, matching the
+additive covariate model of \code{\link[=trop]{trop()}} (\code{L = X.phi + R}); pass their names to
+\code{covariates} in \code{\link[=trop]{trop()}} / \code{\link[=panel_compare]{panel_compare()}} to recover the coefficients.
+Defaults to \code{length(phi)} when \code{phi} is supplied.}
+
+\item{phi}{Optional numeric coefficient vector for the covariates (length
+\code{n_cov}). When \code{NULL} and \code{n_cov > 0}, coefficients are drawn from a
+standard normal. The coefficients actually used are returned on the
+\code{"phi"} attribute of the result.}
 }
 \value{
 A long \code{data.frame} with columns \code{id}, \code{t}, \code{y}, \code{w}, and the noiseless
-counterfactual \code{y0} (useful for evaluating estimators).
+counterfactual \code{y0} (useful for evaluating estimators). When \code{n_cov > 0} it
+additionally carries covariate columns \code{x1}, ..., \verb{x\{n_cov\}}, and the true
+coefficients are stored on \code{attr(., "phi")}.
 }
 \description{
 Generates a long panel whose untreated potential outcomes follow an
@@ -46,4 +62,9 @@ Viviano (2025). A block treatment is applied to \code{n_treated} units from peri
 \examples{
 df <- sim_panel(N = 30, T = 15, n_treated = 5, t0 = 11, seed = 42)
 head(df)
+
+# Two covariates with known coefficients, recoverable by trop(covariates=):
+dc <- sim_panel(N = 30, T = 12, n_treated = 4, t0 = 9,
+                n_cov = 2, phi = c(1.2, -0.7), seed = 1)
+attr(dc, "phi")
 }
