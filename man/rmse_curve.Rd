@@ -23,6 +23,7 @@ rmse_curve(
   control = trop_control(),
   seed = 1L,
   parallel = FALSE,
+  progress = interactive(),
   verbose = FALSE
 )
 }
@@ -72,7 +73,14 @@ installed, the Monte Carlo tasks are run in parallel honouring the active
 Results are identical to the sequential default because each task is
 self-seeded. Default \code{FALSE}.}
 
-\item{verbose}{Logical; print progress per swept value.}
+\item{progress}{Logical; print a rough progress indicator (completed fits, a
+percentage, elapsed time and an ETA) periodically while the curve runs.
+Helpful for the heavy large-\code{n_runs} jobs. Defaults to \code{interactive()}, so
+it shows in an interactive session and stays silent in scripts and tests.
+Messages go to \code{stderr()}; wrap in \code{suppressMessages()} to mute.}
+
+\item{verbose}{Logical; additionally print a line as each swept value
+finishes. Independent of \code{progress}.}
 }
 \value{
 A \code{cf_rmse_curve} (a \code{data.frame}) with columns \code{method}, \code{x}

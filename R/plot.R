@@ -10,6 +10,17 @@
   }
 }
 
+# Centre the main title and subtitle. Appended to every ggplot the package
+# returns, so titles default to centre alignment everywhere.
+#' @keywords internal
+#' @noRd
+.center_titles <- function() {
+  ggplot2::theme(
+    plot.title    = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5)
+  )
+}
+
 #' Forest plot of ATT estimates across methods
 #'
 #' Point estimate and (where available) confidence interval for each method,
@@ -53,7 +64,8 @@ autoplot.cf_att_tbl <- function(object, ...) {
     ggplot2::geom_point(size = 2.8) +
     ggplot2::labs(x = "ATT estimate", y = NULL,
                   title = "Panel estimator comparison") +
-    ggplot2::theme_minimal(base_size = 12)
+    ggplot2::theme_minimal(base_size = 12) +
+    .center_titles()
 }
 
 #' @export
@@ -106,7 +118,8 @@ plot_counterfactual <- function(x, methods = NULL) {
     ggplot2::labs(x = "Time", y = "Outcome (treated-unit average)",
                   colour = NULL, linetype = NULL,
                   title = "Observed vs. predicted counterfactual") +
-    ggplot2::theme_minimal(base_size = 12)
+    ggplot2::theme_minimal(base_size = 12) +
+    .center_titles()
 }
 
 #' Synthetic-control-style trajectory plot for a single TROP fit
@@ -152,18 +165,29 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
 
   t0_time <- if (!is.na(pat$block_t0)) times[pat$block_t0] else NA
 
+  # subtitle: the three penalties and how the SE was obtained
+  fmt <- function(z) if (is.infinite(z)) "Inf" else sprintf("%.2f", z)
+  lam_txt <- sprintf("\u03bb = (unit %s, time %s, nn %s)",
+                     fmt(lam$unit), fmt(lam$time), fmt(lam$nn))
+  se_txt <- switch(object$se.method %||% "none",
+    bootstrap = if (!is.null(object$n_boot))
+                  sprintf("Bootstrap SE (%d reps)", object$n_boot) else "Bootstrap SE",
+    jackknife = "Jackknife SE",
+    placebo   = "Placebo SE",
+    none      = "no SE",
+    sprintf("%s SE", object$se.method))
+  sub_txt <- paste(lam_txt, se_txt, sep = " \u00b7 ")
+
   p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data$time, y = .data$value,
                                          colour = .data$series)) +
     ggplot2::geom_line(linewidth = 0.9) +
     ggplot2::scale_colour_manual(
       values = c("treated (observed)" = "#1b9e9e",
                  "estimated Y(0)" = "#e8665a")) +
-    ggplot2::labs(x = "Time", y = "Outcome (treated-unit average)",
+    ggplot2::labs(x = "Time", y = "Outcome",
                   colour = NULL,
                   title = "TROP: treated vs. estimated counterfactual",
-                  subtitle = sprintf("ATT = %.3f%s", object$estimate,
-                    if (is.finite(object$std.error))
-                      sprintf("  (SE %.3f)", object$std.error) else ""))
+                  subtitle = sub_txt)
 
   if (!is.na(t0_time)) {
     # shade the post-treatment gap (the estimated effect)
@@ -193,7 +217,8 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
   }
 
   p + ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::theme(legend.position = "top")
+    ggplot2::theme(legend.position = "top") +
+    .center_titles()
 }
 
 #' @export

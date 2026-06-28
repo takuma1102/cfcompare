@@ -1,6 +1,5 @@
-# cfcompare 0.1.0
+# cfcompare 0.1.0.9000
 
-* Initial version.
 * Native R implementations of the Triply
   RObust Panel (TROP) estimator of Athey, Imbens, Qu & Viviano (2026).
 * `panel_compare()` runs DID, SDID, SC, MC, TROP, gsynth and augsynth on one

@@ -285,6 +285,18 @@ autoplot.cf_rmse_tbl <- function(object, ...) {
   best <- df$method[which.min(df$rmse)]
   df$is_best <- df$method == best
   lo <- df$rmse - df$rmse_se; hi <- df$rmse + df$rmse_se
+  metric <- attr(object, "metric") %||% "placebo"
+  if (identical(metric, "prediction")) {
+    rmse_lab  <- "Out-of-sample prediction RMSE"
+    title_lab <- "Out-of-sample Prediction RMSE by Method"
+    sub_lab   <- sprintf("horizon = %s periods, %s runs",
+                         attr(object, "horizon"), df$n_runs[1])
+  } else {
+    rmse_lab  <- "Placebo RMSE"
+    title_lab <- "Placebo RMSE by Method"
+    sub_lab   <- sprintf("horizon = %s periods, %s placebo runs",
+                         attr(object, "horizon"), df$n_runs[1])
+  }
   ggplot2::ggplot(df, ggplot2::aes(x = .data$method, y = .data$rmse,
                                    fill = .data$is_best)) +
     ggplot2::geom_col(width = 0.65) +
@@ -294,11 +306,11 @@ autoplot.cf_rmse_tbl <- function(object, ...) {
     ggplot2::scale_fill_manual(values = c(`TRUE` = "#2c7fb8", `FALSE` = "grey60"),
                                guide = "none") +
     ggplot2::labs(
-      x = NULL, y = "Out-of-sample RMSE (lower is better)",
-      title = "Out-of-sample RMSE by method",
-      subtitle = sprintf("horizon = %s periods, %s placebo runs",
-                         attr(object, "horizon"), df$n_runs[1])) +
-    ggplot2::theme_minimal()
+      x = NULL, y = rmse_lab,
+      title = title_lab,
+      subtitle = sub_lab) +
+    ggplot2::theme_minimal() +
+    .center_titles()
 }
 
 #' @export

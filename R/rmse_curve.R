@@ -40,6 +40,17 @@
   force(expr)
 }
 
+#' Format a duration in seconds as a short human string for progress messages.
+#' @keywords internal
+#' @noRd
+.fmt_dur <- function(s) {
+  if (!is.finite(s)) return("?")
+  if (s < 60) return(sprintf("%.0fs", s))
+  if (s < 3600) return(sprintf("%dm%02ds", as.integer(s) %/% 60L,
+                                as.integer(round(s)) %% 60L))
+  sprintf("%dh%02dm", as.integer(s) %/% 3600L, (as.integer(s) %% 3600L) %/% 60L)
+}
+
 #' Default semi-synthetic generator: a richer factor model with interactive
 #' confounding. Y(0) combines unit/time fixed effects, several random-walk latent
 #' factors, heterogeneous unit-specific linear trends, and AR(1) idiosyncratic
@@ -134,7 +145,13 @@
 #'   `future` plan (e.g. `future::plan(future::multisession, workers = 6)`).
 #'   Results are identical to the sequential default because each task is
 #'   self-seeded. Default `FALSE`.
-#' @param verbose Logical; print progress per swept value.
+#' @param progress Logical; print a rough progress indicator (completed fits, a
+#'   percentage, elapsed time and an ETA) periodically while the curve runs.
+#'   Helpful for the heavy large-`n_runs` jobs. Defaults to `interactive()`, so
+#'   it shows in an interactive session and stays silent in scripts and tests.
+#'   Messages go to `stderr()`; wrap in `suppressMessages()` to mute.
+#' @param verbose Logical; additionally print a line as each swept value
+#'   finishes. Independent of `progress`.
 #' @return A `cf_rmse_curve` (a `data.frame`) with columns `method`, `x`
 #'   (the swept value), `rmse`, `bias`, `n_runs`. The swept-dimension label is in
 #'   `attr(., "vary")`.
@@ -157,7 +174,8 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
                        rank = 4L, att = 2, noise = 1,
                        ar = 0.4, trend_sd = 0.05,
                        anchor = "pooled", control = trop_control(),
-                       seed = 1L, parallel = FALSE, verbose = FALSE) {
+                       seed = 1L, parallel = FALSE, progress = interactive(),
+                       verbose = FALSE) {
   vary <- match.arg(vary)
   # rmse_curve() seeds each Monte Carlo replication internally (via
   # .rmse_curve_gen) so its results are reproducible; save and restore the
@@ -198,7 +216,31 @@ rmse_curve <- function(vary = c("n_control", "n_pre"),
                       KEEP.OUT.ATTRS = FALSE)
   tasks <- lapply(seq_len(nrow(grid)),
                   function(i) list(v = values[grid$vi[i]], r = grid$r[i]))
-  res <- .par_lapply(tasks, one_task, parallel = parallel)
+
+  # Run the tasks in chunks so a rough progress indicator (completed count, %,
+  # elapsed time, ETA) can be printed periodically -- these runs get heavy when
+  # n_runs is large. Chunking does not change results: every task is self-seeded.
+  total <- length(tasks)
+  res <- vector("list", total)
+  if (isTRUE(progress)) {
+    message(sprintf("rmse_curve [%s]: %d runs x %d value(s) = %d fits%s",
+                    vary, n_runs, length(values), total,
+                    if (isTRUE(parallel)) " (parallel)" else ""))
+  }
+  n_chunks <- max(1L, min(20L, total))
+  bounds <- floor(seq(0, total, length.out = n_chunks + 1L))
+  t0 <- Sys.time()
+  for (ci in seq_len(n_chunks)) {
+    lo <- bounds[ci] + 1L; hi <- bounds[ci + 1L]
+    if (hi < lo) next                                # skip any empty chunk
+    res[lo:hi] <- .par_lapply(tasks[lo:hi], one_task, parallel = parallel)
+    if (isTRUE(progress)) {
+      el <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+      eta <- if (hi < total) el / hi * (total - hi) else 0
+      message(sprintf("  %d/%d fits (%2.0f%%) | elapsed %s | ETA %s",
+                      hi, total, 100 * hi / total, .fmt_dur(el), .fmt_dur(eta)))
+    }
+  }
 
   rows <- list(); k <- 0L
   for (vi in seq_along(values)) {
@@ -312,7 +354,8 @@ autoplot.cf_rmse_curve <- function(object, log_y = TRUE, ...) {
       title = sprintf("RMSE vs. %s", tolower(attr(object, "xlab"))),
       subtitle = sprintf("%d Monte Carlo reps per point", d$n_runs[1])) +
     ggplot2::theme_minimal(base_size = 14) +
-    ggplot2::theme(legend.position = "right")
+    ggplot2::theme(legend.position = "right") +
+    .center_titles()
   if (isTRUE(log_y)) p <- p + ggplot2::scale_y_log10()
   p
 }

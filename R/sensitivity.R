@@ -123,13 +123,80 @@ autoplot.cf_trop_grid <- function(object, ...) {
     ggplot2::scale_fill_viridis_c(option = "D", direction = -1, name = "CV loss") +
     ggplot2::labs(
       x = expression(lambda[nn]), y = expression(lambda[time]),
-      title = "TROP penalty sensitivity",
-      subtitle = "colour = CV loss; numbers = ATT; red = CV-selected") +
-    ggplot2::theme_minimal(base_size = 12)
+      title = "TROP Penalty Sensitivity",
+      subtitle = "cell values = ATT; red outline = CV-selected") +
+    ggplot2::theme_minimal(base_size = 12) +
+    .center_titles()
 }
 
 #' @export
 plot.cf_trop_grid <- function(x, ...) {
   print(autoplot.cf_trop_grid(x, ...))
   invisible(x)
+}
+
+#' Base-R surface views of a TROP penalty-sensitivity grid
+#'
+#' Draws the cross-validation-loss surface and the ATT surface from a
+#' [trop_sensitivity()] grid as two separate, full-width base-graphics plots,
+#' each with a colour key (legend) on the right. Unlike [autoplot.cf_trop_grid()]
+#' --- a single `ggplot2` heatmap that packs both into one panel --- this view
+#' keeps the surfaces apart so neither is squeezed, and needs no `ggplot2`.
+#'
+#' @param grid A `cf_trop_grid` returned by [trop_sensitivity()].
+#' @param which Which surface(s) to draw: `"both"` (default), `"cv_loss"`, or
+#'   `"att"`. With `"both"` the two surfaces are drawn as separate figures; on an
+#'   interactive screen device you are prompted between them (use a multi-page
+#'   device such as `pdf()`, or call once per surface, to keep both).
+#' @param ask Logical; when drawing both on an interactive device, prompt before
+#'   the second figure. Defaults to `interactive()`.
+#' @param ... Further arguments passed to [graphics::filled.contour()].
+#' @return Invisibly, a list with the `cv_loss` and `att` surface matrices
+#'   (rows = `lambda_time`, columns = `lambda_nn`).
+#' @seealso [trop_sensitivity()], [autoplot.cf_trop_grid()]
+#' @examples
+#' \donttest{
+#' df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
+#' g <- trop_sensitivity(df, "y", "w", "id", "t",
+#'                       lambda_time = c(0, 0.25, 1),
+#'                       control = trop_control(n_cv_cells = 12L, cv_cycles = 1L))
+#' plot_trop_surfaces(g, which = "cv_loss")
+#' }
+#' @export
+plot_trop_surfaces <- function(grid, which = c("both", "cv_loss", "att"),
+                               ask = interactive(), ...) {
+  stopifnot(inherits(grid, "cf_trop_grid"))
+  which <- match.arg(which)
+
+  # Reshape the long grid into (lambda_time x lambda_nn) matrices without a
+  # formula, so there are no undefined-global NOTEs.
+  lt <- sort(unique(grid$lambda_time))
+  ln <- sort(unique(grid$lambda_nn))
+  cv_surface  <- matrix(NA_real_, length(lt), length(ln), dimnames = list(lt, ln))
+  att_surface <- cv_surface
+  ix <- cbind(match(grid$lambda_time, lt), match(grid$lambda_nn, ln))
+  cv_surface[ix]  <- grid$cv_loss
+  att_surface[ix] <- grid$att
+
+  viridis <- function(n) grDevices::hcl.colors(n, "Viridis", rev = TRUE)
+  bluered <- function(n) grDevices::hcl.colors(n, "Blue-Red")
+  draw <- function(z, main, key, pal) {
+    graphics::filled.contour(ln, lt, t(z), color.palette = pal,
+      xlab = expression(lambda[nn]), ylab = expression(lambda[time]),
+      main = main,
+      key.title = graphics::title(main = key, cex.main = 0.9, font.main = 1),
+      ...)
+  }
+
+  if (which %in% c("both", "cv_loss")) {
+    draw(cv_surface, "CV loss surface", "CV loss", viridis)
+  }
+  if (which == "both" && isTRUE(ask)) {
+    op <- graphics::par(ask = TRUE)            # prompt before the 2nd figure only
+    on.exit(graphics::par(op), add = TRUE)
+  }
+  if (which %in% c("both", "att")) {
+    draw(att_surface, "ATT surface", "ATT", bluered)
+  }
+  invisible(list(cv_loss = cv_surface, att = att_surface))
 }
