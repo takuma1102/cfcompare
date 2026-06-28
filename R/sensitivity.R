@@ -110,6 +110,13 @@ autoplot.cf_trop_grid <- function(object, ...) {
   d$ltf <- factor(round(d$lambda_time, 4))
   d$lnf <- factor(round(d$lambda_nn, 4))
   s <- attr(object, "selected")
+  # report the unit penalty held fixed across the sweep. Built as a plotmath
+  # expression so the lambda glyph renders via the symbol font (locale-portable).
+  lu <- d$lambda_unit[1L]
+  lu_txt <- if (is.infinite(lu)) "Inf" else sprintf("%.3g", lu)
+  sub_txt <- substitute(
+    "fixed " * lambda[unit] == v * ";  cell values = ATT; red outline = CV-selected",
+    list(v = lu_txt))
   ggplot2::ggplot(d, ggplot2::aes(x = .data$lnf, y = .data$ltf,
                                   fill = .data$cv_loss)) +
     ggplot2::geom_tile(colour = "white", linewidth = 0.4) +
@@ -124,7 +131,7 @@ autoplot.cf_trop_grid <- function(object, ...) {
     ggplot2::labs(
       x = expression(lambda[nn]), y = expression(lambda[time]),
       title = "TROP Penalty Sensitivity",
-      subtitle = "cell values = ATT; red outline = CV-selected") +
+      subtitle = sub_txt) +
     ggplot2::theme_minimal(base_size = 12) +
     .center_titles()
 }

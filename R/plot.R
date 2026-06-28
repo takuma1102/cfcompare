@@ -165,9 +165,13 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
 
   t0_time <- if (!is.na(pat$block_t0)) times[pat$block_t0] else NA
 
-  # subtitle: the three penalties and how the SE was obtained
+  # subtitle: the three penalties and how the SE was obtained.
+  # Built as a plotmath expression so the lambda and centre-dot glyphs are drawn
+  # from the symbol font. Embedding the raw Unicode characters in device text
+  # triggers an "mbcsToSbcs" conversion failure under non-UTF-8 locales (e.g.
+  # the C locale used by R CMD check on some platforms).
   fmt <- function(z) if (is.infinite(z)) "Inf" else sprintf("%.2f", z)
-  lam_txt <- sprintf("\u03bb = (unit %s, time %s, nn %s)",
+  lam_txt <- sprintf("(unit %s, time %s, nn %s)",
                      fmt(lam$unit), fmt(lam$time), fmt(lam$nn))
   se_txt <- switch(object$se.method %||% "none",
     bootstrap = if (!is.null(object$n_boot))
@@ -176,7 +180,7 @@ autoplot.trop <- function(object, show_weights = TRUE, ...) {
     placebo   = "Placebo SE",
     none      = "no SE",
     sprintf("%s SE", object$se.method))
-  sub_txt <- paste(lam_txt, se_txt, sep = " \u00b7 ")
+  sub_txt <- substitute(lambda == lt %.% st, list(lt = lam_txt, st = se_txt))
 
   p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data$time, y = .data$value,
                                          colour = .data$series)) +
