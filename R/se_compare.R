@@ -89,10 +89,10 @@ compare_se_modes <- function(data, outcome, treatment, unit, time,
 
 #' Plot a TROP standard-error comparison
 #'
-#' Forest plot of a [compare_se_modes()] result: every row carries the *same*
-#' TROP point estimate (a vertical reference line marks it) and only the
-#' confidence interval differs between resampling schemes. The title makes clear
-#' this is an inference-mode comparison rather than an estimator comparison.
+#' Forest plot of a [compare_se_modes()] result: every row carries the same TROP
+#' point estimate and only the confidence interval differs between resampling
+#' schemes. Zero is always kept in view and marked with a dashed reference line,
+#' since whether the interval covers zero is the quantity of interest.
 #'
 #' @param object A `cf_se_comparison` from [compare_se_modes()].
 #' @param ... Unused.
@@ -104,10 +104,11 @@ autoplot.cf_se_comparison <- function(object, ...) {
   df <- df[!is.na(df$estimate), , drop = FALSE]
   df$method <- factor(df$method, levels = rev(unique(df$method)))
   has_ci <- any(is.finite(df$conf.low) & is.finite(df$conf.high))
-  est <- stats::median(df$estimate, na.rm = TRUE)
 
+  # whether 0 sits inside the interval is the question, so 0 is always in view
+  # and marked, with the axis spanning from 0 out to the intervals.
   p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$estimate, y = .data$method)) +
-    ggplot2::geom_vline(xintercept = est, linetype = "dotted", colour = "grey55")
+    ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "grey55")
   if (has_ci) {
     p <- p + ggplot2::geom_errorbarh(
       ggplot2::aes(xmin = .data$conf.low, xmax = .data$conf.high),
@@ -115,10 +116,11 @@ autoplot.cf_se_comparison <- function(object, ...) {
   }
   p +
     ggplot2::geom_point(size = 2.8) +
+    ggplot2::expand_limits(x = 0) +
     ggplot2::labs(
       x = "ATT estimate", y = NULL,
-      title = "Same TROP estimate under alternative SE methods",
-      subtitle = "Point estimate fixed by cross-validation; only the interval differs") +
+      title = "Comparison across SE methods",
+      subtitle = "Point estimate fixed by cross-validation") +
     ggplot2::theme_minimal(base_size = 12) +
     .center_titles()
 }

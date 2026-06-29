@@ -15,8 +15,8 @@
 A \pkg{ggplot2} object.
 }
 \description{
-Forest plot of a \code{\link[=compare_se_modes]{compare_se_modes()}} result: every row carries the \emph{same}
-TROP point estimate (a vertical reference line marks it) and only the
-confidence interval differs between resampling schemes. The title makes clear
-this is an inference-mode comparison rather than an estimator comparison.
+Forest plot of a \code{\link[=compare_se_modes]{compare_se_modes()}} result: every row carries the same TROP
+point estimate and only the confidence interval differs between resampling
+schemes. Zero is always kept in view and marked with a dashed reference line,
+since whether the interval covers zero is the quantity of interest.
 }
