@@ -3,6 +3,7 @@
 \name{trop_ablation}
 \alias{trop_ablation}
 \alias{print.trop_ablation}
+\alias{plot.trop_ablation}
 \title{Penalty ablation for the TROP estimator}
 \usage{
 trop_ablation(
@@ -19,6 +20,8 @@ trop_ablation(
 )
 
 \method{print}{trop_ablation}(x, digits = 3, ...)
+
+\method{plot}{trop_ablation}(x, file = NULL, width = NULL, height = NULL, res = 200, digits = 3, ...)
 }
 \arguments{
 \item{data, outcome, treatment, unit, time, covariates}{Passed to \code{\link[=trop]{trop()}}.}
@@ -39,6 +42,16 @@ full specification's penalties and skip cross-validation.}
 \item{digits}{Number of decimal places for the penalties and estimates.}
 
 \item{...}{Unused.}
+
+\item{file}{Optional output path. When supplied, the table is rendered to that
+file instead of the active graphics device; the format is taken from the
+extension (\code{.png}, the default, or \code{.pdf} for vector output). For LaTeX or
+Markdown source use \code{\link[=format]{format()}} instead.}
+
+\item{width, height}{Figure size in inches. Defaults adapt to the number of
+rows and columns.}
+
+\item{res}{Resolution in PPI for the \code{.png} device (ignored for \code{.pdf}).}
 }
 \value{
 An object of class \code{trop_ablation} (a \code{data.frame}) with one row per

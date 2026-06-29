@@ -227,3 +227,124 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
       "\\end{table}")
   }
 }
+
+# ---- figure output ----------------------------------------------------------
+
+# Pure-grid renderer for the ablation table (no gridExtra/gt/Chrome needed, so
+# it works on any R install and on a headless machine). Draws onto the current
+# device/page; .render_ablation() opens a file device around it when asked.
+#' @keywords internal
+#' @noRd
+.draw_trop_ablation <- function(x, digits = 3) {
+  cols <- .abl_columns(x, digits, inf = "Inf",
+                       ci_fmt = function(lo, hi) sprintf("[%s, %s]", lo, hi))
+  key  <- names(cols)
+  hdr  <- key
+  hdr[key == "lt"] <- "lambda_time"
+  hdr[key == "lu"] <- "lambda_unit"
+  hdr[key == "ln"] <- "lambda_nn"
+  align <- ifelse(key == "Specification", "l", "r")
+  body  <- lapply(cols, as.character)
+  nc <- length(body); nb <- length(body[[1]])
+
+  charw <- vapply(seq_len(nc), function(j)
+    max(nchar(hdr[j]), max(nchar(body[[j]]), 1L)), integer(1)) + 2L
+  wfrac <- charw / sum(charw)
+  xr <- cumsum(wfrac); xl <- xr - wfrac
+
+  title <- "TROP penalty ablation"
+  subtitle <- sprintf("outcome: %s    anchor: %s    SE: %s",
+                      attr(x, "outcome") %||% "?", attr(x, "anchor") %||% "?",
+                      attr(x, "se") %||% "none")
+
+  c_head_bg <- "#2b3a55"; c_head_fg <- "white"
+  c_stripe  <- "#eef1f6"; c_rule <- "#9aa6bd"; c_text <- "#1d2740"
+
+  grid::grid.newpage()
+  grid::pushViewport(grid::viewport(width = 0.94, height = 0.92))
+  on.exit(grid::popViewport(), add = TRUE)
+
+  top_title <- 0.17
+  table_top <- 1 - top_title
+  n_tot <- nb + 1L
+  rh <- table_top / n_tot
+
+  grid::grid.text(title, x = 0, y = 0.98, just = c("left", "top"),
+                  gp = grid::gpar(fontface = "bold", fontsize = 14, col = c_text))
+  grid::grid.text(subtitle, x = 0, y = 0.98 - 0.075, just = c("left", "top"),
+                  gp = grid::gpar(fontsize = 9.5, col = "#5a6477"))
+
+  cell_x <- function(j) if (align[j] == "l")
+    grid::unit(xl[j], "npc") + grid::unit(4, "pt") else
+    grid::unit(xr[j], "npc") - grid::unit(4, "pt")
+  cell_just <- function(j) c(if (align[j] == "l") "left" else "right", "centre")
+
+  hy <- table_top - rh / 2
+  grid::grid.rect(x = 0.5, y = hy, width = 1, height = rh,
+                  gp = grid::gpar(fill = c_head_bg, col = NA))
+  for (j in seq_len(nc))
+    grid::grid.text(hdr[j], x = cell_x(j), y = hy, just = cell_just(j),
+                    gp = grid::gpar(col = c_head_fg, fontface = "bold", fontsize = 10))
+
+  for (i in seq_len(nb)) {
+    ry <- table_top - rh * (i + 0.5)
+    if (i %% 2L == 0L)
+      grid::grid.rect(x = 0.5, y = ry, width = 1, height = rh,
+                      gp = grid::gpar(fill = c_stripe, col = NA))
+    for (j in seq_len(nc))
+      grid::grid.text(body[[j]][i], x = cell_x(j), y = ry, just = cell_just(j),
+                      gp = grid::gpar(fontsize = 9.5, col = c_text,
+                                      fontfamily = if (align[j] == "r") "mono" else ""))
+  }
+
+  for (yy in c(table_top, table_top - rh, table_top - rh * n_tot))
+    grid::grid.lines(x = c(0, 1), y = yy, gp = grid::gpar(col = c_rule, lwd = 1.2))
+
+  invisible()
+}
+
+# Open a file device by extension (png default, pdf for vector) and draw.
+#' @keywords internal
+#' @noRd
+.render_ablation <- function(x, file = NULL, width = NULL, height = NULL,
+                             res = 200, digits = 3) {
+  cols <- .abl_columns(x, digits, inf = "Inf",
+                       ci_fmt = function(lo, hi) sprintf("[%s, %s]", lo, hi))
+  nb <- nrow(x)
+  tot_chars <- sum(vapply(cols, function(z) max(nchar(z), 6L), integer(1))) +
+    2L * length(cols)
+  if (is.null(width))  width  <- max(6, 0.10 * tot_chars + 1)
+  if (is.null(height)) height <- 0.95 + 0.34 * (nb + 1)
+
+  if (!is.null(file)) {
+    ext <- tolower(tools::file_ext(file))
+    if (ext == "") { file <- paste0(file, ".png"); ext <- "png" }
+    if (ext == "pdf") {
+      grDevices::pdf(file, width = width, height = height)
+    } else if (ext == "png") {
+      grDevices::png(file, width = width, height = height, units = "in", res = res)
+    } else {
+      stop("plot() on a trop_ablation writes .png or .pdf; ",
+           "for .tex/.md use format(x, \"latex\"/\"markdown\").", call. = FALSE)
+    }
+    on.exit(grDevices::dev.off(), add = TRUE)
+  }
+  .draw_trop_ablation(x, digits = digits)
+  invisible(file)
+}
+
+#' @rdname trop_ablation
+#' @param file Optional output path. When supplied, the table is rendered to that
+#'   file instead of the active graphics device; the format is taken from the
+#'   extension (`.png`, the default, or `.pdf` for vector output). For LaTeX or
+#'   Markdown source use [format()] instead.
+#' @param width,height Figure size in inches. Defaults adapt to the number of
+#'   rows and columns.
+#' @param res Resolution in PPI for the `.png` device (ignored for `.pdf`).
+#' @export
+plot.trop_ablation <- function(x, file = NULL, width = NULL, height = NULL,
+                               res = 200, digits = 3, ...) {
+  .render_ablation(x, file = file, width = width, height = height,
+                   res = res, digits = digits)
+  invisible(x)
+}
