@@ -53,15 +53,12 @@ to use.
 ```r
 library(cfcompare)
 
-# Simulate a factor-model panel with a block treatment.
-df <- sim_panel(N = 30, T = 16, n_treated = 5, t0 = 12, att = 2, seed = 1)
-
-# Compare estimators on the same data.
+# Compare multiple estimators.
 cmp <- panel_compare(
   df,
   outcome = "y", treatment = "w", unit = "id", time = "t",
-  methods = c("DID", "SDID", "MC", "TROP"),
-  se = "jackknife"
+  methods = c("DID", "SDID", "MC", "TROP", "DIFP"),
+  se = "bootstrap"
 )
 
 cmp$att                    # tidy ATT table, one row per method
