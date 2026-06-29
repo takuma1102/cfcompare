@@ -104,7 +104,8 @@ plot_counterfactual <- function(x, methods = NULL) {
   }))
   dat <- rbind(base, pred)
 
-  t0_time <- if (!is.na(x$pattern$block_t0)) times[x$pattern$block_t0] else NA
+  t0_time <- if (!is.na(x$pattern$block_t0) && x$pattern$block_t0 > 1L)
+    times[x$pattern$block_t0 - 1L] else NA
 
   p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data$time, y = .data$value,
                                          colour = .data$series)) +
@@ -125,7 +126,7 @@ plot_counterfactual <- function(x, methods = NULL) {
 #'
 #' Draws the treated-unit average observed path against the estimated untreated
 #' (counterfactual) path, in the style of the \pkg{synthdid} plot: a dashed line
-#' marks the first treated period, the post-treatment gap between the two lines is
+#' marks the last pre-treatment period, the post-treatment gap between the two lines is
 #' the estimated effect, and -- since TROP carries explicit time weights -- the
 #' time weights \eqn{\theta_s = \exp(-\lambda_{time} |t - s|)} are drawn as a
 #' filled band along the bottom (as in \pkg{synthdid}'s time-weight strip) to
@@ -178,7 +179,8 @@ autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
     data.frame(time = times, value = obs, series = "Treated (observed)"),
     data.frame(time = times, value = cf,  series = "Estimated Y(0)"))
 
-  t0_time <- if (!is.na(pat$block_t0)) times[pat$block_t0] else NA
+  t0_time <- if (!is.na(pat$block_t0) && pat$block_t0 > 1L)
+    times[pat$block_t0 - 1L] else NA
 
   # subtitle: the three penalties, and (only when show_se = TRUE) how the SE was
   # obtained. By default the SE method is omitted, because this plot does not
@@ -215,7 +217,8 @@ autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
                   subtitle = sub_txt)
 
   if (!is.na(t0_time)) {
-    # mark the first treated period. The post-treatment gap between the two
+    # mark the last pre-treatment period (the period just before treatment
+    # begins). The post-treatment gap between the two
     # lines is the estimated effect; it is left unshaded so it is not mistaken
     # for a confidence band.
     p <- p +

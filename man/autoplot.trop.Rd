@@ -23,7 +23,7 @@ A \code{ggplot} object.
 \description{
 Draws the treated-unit average observed path against the estimated untreated
 (counterfactual) path, in the style of the \pkg{synthdid} plot: a dashed line
-marks the first treated period, the post-treatment gap between the two lines is
+marks the last pre-treatment period, the post-treatment gap between the two lines is
 the estimated effect, and -- since TROP carries explicit time weights -- the
 time weights \eqn{\theta_s = \exp(-\lambda_{time} |t - s|)} are drawn as a
 filled band along the bottom (as in \pkg{synthdid}'s time-weight strip) to
