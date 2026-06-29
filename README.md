@@ -177,7 +177,7 @@ cell. The native engines handle block, staggered, and non-absorbing treatment
 patterns. `SDID` and `SC` are block-design methods and are skipped otherwise.
 `CS` is opt-in and requires absorbing staggered/block treatment.
 
-Native estimators support `se = "bootstrap"`, `"jackknife"`, `"placebo"`, and
+Native estimators support `se = "bootstrap"`, `"jackknife"`, and
 `"none"` where applicable. These are practical resampling choices for the R
 workflow; use the TROP paper for formal inference conditions.
 
