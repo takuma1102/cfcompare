@@ -1,4 +1,4 @@
-# *cfcompare*: compare TROP and panel ATT estimators in R
+# *cfcompare*: R package implementing TROP and comparing it with other ATT estimators
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/takuma1102/cfcompare/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/takuma1102/cfcompare/actions/workflows/R-CMD-check.yaml)
@@ -13,13 +13,11 @@
 > ([ostasovskyi/TROP-Estimator](https://github.com/ostasovskyi/TROP-Estimator))
 > and the Stata command
 > ([justinwaddy/TROP](https://github.com/justinwaddy/TROP)). Please cite the
-> paper when using the TROP estimator; see [Citation](#citation).
+> TROP paper when using the TROP estimator; see [Citation](#citation) for more details.
 
 `cfcompare` implements the triply robust panel estimator (TROP) and puts it in a
-common R workflow with DID/TWFE, matrix completion, synthetic DID, synthetic
-control, DIFP, `gsynth`, `augsynth`, and Callaway--Sant'Anna DID. The point is
-not just to estimate TROP, but to compare estimators on the same panel, schema,
-plots, counterfactual matrices, RMSE diagnostics, and penalty-sensitivity tools.
+common R workflow with DID/TWFE, synthetic control, matrix completion, synthetic
+DID, and DIFP. This package enables not just to estimate TROP, but also to compare various ATT estimators on the same schema.
 
 Use `cfcompare` when you want to:
 
@@ -45,7 +43,7 @@ install.packages(
 ```
 
 The core native engines run without optional estimator packages. Install
-`synthdid`, `gsynth`, `augsynth`, or `did` only for the wrapped methods you plan
+`synthdid`, `gsynth`, `augsynth`, or `did` for the wrapped methods you plan
 to use.
 
 ## Quick start
@@ -75,17 +73,17 @@ plot_counterfactual(cmp)   # observed vs fitted untreated paths
 
 | Method | Engine | `panel_compare()` default? | Notes |
 | --- | --- | --- | --- |
-| `DID` | native R | yes | two-way fixed effects / difference-in-differences |
-| `MC` | native R | yes | nuclear-norm matrix completion |
-| `DIFP` | native R | yes | Doudchenko-Imbens-Ferman-Pinto demeaned SC with intercept |
 | `TROP` | native R | yes | low-rank + two-way FE outcome model with unit/time weights |
-| `SDID` | `synthdid` | yes | skipped if `synthdid` is unavailable or the design is unsupported |
+| `DID` | native R | yes | two-way fixed effects / difference-in-differences |
 | `SC` | `synthdid` | no | opt in with `methods =` |
+| `MC` | native R | yes | nuclear-norm matrix completion |
+| `SDID` | `synthdid` | yes | skipped if `synthdid` is unavailable or the design is unsupported |
+| `DIFP` | native R | yes | Doudchenko-Imbens-Ferman-Pinto demeaned SC with intercept |
 | `gsynth` | `gsynth` | no | optional interactive-fixed-effects / MC-style engine |
 | `augsynth` | `augsynth` | no | optional augmented synthetic control engine |
 | `CS` | `did` | no | Callaway--Sant'Anna; requires an absorbing staggered/block treatment |
 
-By default, `panel_compare()` runs `DID`, `SDID`, `MC`, `TROP`, and `DIFP`.
+By default, `panel_compare()` runs `TROP`, `DID`, `MC`, `SDID`, and `DIFP`.
 Use `methods =` to specify an explicit set, or `exclude =` to drop one method
 from the default set. Optional engines whose package is missing, or whose design
 requirements are not met, are skipped with a message while the remaining methods
