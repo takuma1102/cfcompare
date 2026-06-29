@@ -77,7 +77,7 @@ plot_counterfactual(cmp)   # observed vs fitted untreated paths
 | --- | --- | --- | --- |
 | `DID` | native R | yes | two-way fixed effects / difference-in-differences |
 | `MC` | native R | yes | nuclear-norm matrix completion |
-| `DIFP` | native R | yes | Doudchenko--Imbens--Ferman--Pinto demeaned SC with intercept |
+| `DIFP` | native R | yes | Doudchenko-Imbens-Ferman-Pinto demeaned SC with intercept |
 | `TROP` | native R | yes | low-rank + two-way FE outcome model with unit/time weights |
 | `SDID` | `synthdid` | yes | skipped if `synthdid` is unavailable or the design is unsupported |
 | `SC` | `synthdid` | no | opt in with `methods =` |
