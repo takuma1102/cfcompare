@@ -45,7 +45,7 @@ R \code{svd()}. The two agree to numerical tolerance; \code{"truncated"} is fast
 large panels, \code{"full"} is used for exact numerical-agreement checks.}
 
 \item{workers}{Number of parallel workers for the embarrassingly parallel
-loops (cross-validation cells, and the bootstrap / jackknife / placebo
+loops (cross-validation cells, and the bootstrap / jackknife
 replicates). \code{1} (default) runs serially. Values \verb{> 1} use
 \code{future.apply}/\code{future} when installed (a transient \code{multisession} plan is
 set up and restored automatically); if those packages are missing it falls

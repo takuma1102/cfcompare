@@ -6,7 +6,7 @@
 \usage{
 trop_event_study(
   object,
-  se = c("bootstrap", "jackknife", "placebo", "none"),
+  se = c("bootstrap", "jackknife", "none"),
   pre_periods = TRUE,
   control = NULL,
   ...
@@ -17,8 +17,7 @@ trop_event_study(
 
 \item{se}{Standard-error method for the per-period effects: \code{"bootstrap"}
 (default; unit-level stratified block bootstrap), \code{"jackknife"}
-(leave-one-treated-unit-out; needs at least 2 treated units), \code{"placebo"} (assign
-the treated pattern to controls), or \code{"none"}.}
+(leave-one-treated-unit-out; needs at least 2 treated units), or \code{"none"}.}
 
 \item{pre_periods}{Logical; include pre-treatment event times as placebo /
 pre-trend points (default \code{TRUE}).}

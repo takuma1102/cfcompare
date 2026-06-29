@@ -323,7 +323,7 @@
   }
   att <- .difp_att(Y, W, pat)
   z <- stats::qnorm(1 - (1 - conf_level) / 2)
-  if (identical(se, "auto")) se <- if (pat$n_treated_units >= 2) "jackknife" else "placebo"
+  if (identical(se, "auto")) se <- if (pat$n_treated_units >= 2) "jackknife" else "none"
   se_val <- NA_real_; meth <- se
   if (se == "jackknife" && pat$n_treated_units >= 2) {
     tu <- pat$treated_units; G <- length(tu); a <- numeric(G)
@@ -333,19 +333,6 @@
       a[g] <- .difp_att(Yk, Wk, .assignment_pattern(Wk))
     }
     se_val <- sqrt((G - 1) / G * sum((a - mean(a))^2))
-  } else if (se == "placebo" || (se == "jackknife" && pat$n_treated_units < 2)) {
-    co <- setdiff(seq_len(nrow(Y)), pat$treated_units)
-    tcols <- which(colSums(W[pat$treated_units, , drop = FALSE]) > 0)
-    if (length(co) >= 2) {
-      pl <- numeric(length(co))
-      for (k in seq_along(co)) {
-        Wp <- matrix(0, nrow(Y), ncol(Y), dimnames = dimnames(Y))
-        Wp[co[k], tcols] <- 1
-        pl[k] <- .difp_att(Y, Wp, .assignment_pattern(Wp))
-      }
-      se_val <- stats::sd(pl, na.rm = TRUE)
-    }
-    meth <- "placebo"
   } else {
     meth <- "none"
   }

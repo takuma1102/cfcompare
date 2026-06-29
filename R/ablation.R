@@ -360,6 +360,24 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
   )
 }
 
+# Vertical layout in inches (top-down), shared by the renderer and the
+# auto-sizer so the row pitch and the title gaps stay at a normal, fixed level
+# regardless of the device height (rather than stretching to fill a tall pane).
+#' @keywords internal
+#' @noRd
+.abl_layout <- function(nb) {
+  c_title <- 0.16
+  c_sub   <- c_title + 0.30
+  y_top   <- c_sub + 0.26
+  c_head  <- y_top + 0.26
+  y_mid   <- c_head + 0.20
+  ROW     <- 0.32
+  c_rows  <- (y_mid + 0.26) + (seq_len(nb) - 1L) * ROW
+  y_bot   <- c_rows[nb] + 0.24
+  list(c_title = c_title, c_sub = c_sub, y_top = y_top, c_head = c_head,
+       y_mid = y_mid, c_rows = c_rows, y_bot = y_bot, content_h = y_bot + 0.08)
+}
+
 # Pure-grid renderer (no gridExtra/gt/Chrome, so it works headless). Booktabs
 # style after the paper: serif type, centred title/subtitle, no shading, three
 # rules. Draws onto the current device; .render_ablation() opens a file device.
@@ -389,45 +407,45 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
   substr(meta, 1L, 1L) <- toupper(substr(meta, 1L, 1L))   # capitalised opener
 
   c_rule <- "#222222"; c_text <- "#111111"; c_sub <- "#555555"; ff <- "serif"
+  lay <- .abl_layout(nb)
 
   grid::grid.newpage()
-  grid::pushViewport(grid::viewport(width = 0.92, height = 0.9))
+  grid::pushViewport(grid::viewport(width = 0.92, height = 1))
   on.exit(grid::popViewport(), add = TRUE)
 
-  table_top <- 1 - 0.18
-  n_tot <- nb + 1L
-  rh <- table_top / n_tot
-
-  grid::grid.text(title, x = 0.5, y = 0.99, just = c("centre", "top"),
-                  gp = grid::gpar(fontface = "bold", fontsize = 15,
-                                  fontfamily = ff, col = c_text))
-  grid::grid.text(meta, x = 0.5, y = 0.99 - 0.085, just = c("centre", "top"),
-                  gp = grid::gpar(fontsize = 10.5, fontfamily = ff, col = c_sub))
+  # Centre the fixed-height content block vertically; map inch offsets from its
+  # top, so the row pitch is constant whatever the device/pane height is.
+  dev_h <- grid::convertHeight(grid::unit(1, "npc"), "inches", valueOnly = TRUE)
+  ytop  <- 0.5 + (lay$content_h / 2) / max(dev_h, lay$content_h)
+  at <- function(off) grid::unit(ytop, "npc") - grid::unit(off, "inches")
 
   xpos <- function(j) if (j == 1L) grid::unit(xl[1], "npc") else
     grid::unit(xr[j], "npc") - grid::unit(2, "pt")
   jjust <- function(j) if (j == 1L) c("left", "centre") else c("right", "centre")
-  put <- function(lbl, j, y, bold = FALSE)
-    grid::grid.text(lbl, x = xpos(j), y = y, just = jjust(j),
+  put <- function(lbl, j, off, bold = FALSE)
+    grid::grid.text(lbl, x = xpos(j), y = at(off), just = jjust(j),
                     gp = grid::gpar(fontsize = 11, fontfamily = ff, col = c_text,
                                     fontface = if (bold) "bold" else "plain"))
-
-  hy <- table_top - rh / 2
-  put("Specification", 1L, hy, bold = TRUE)
-  for (j in seq_len(nvc)) put(vnames[j], j + 1L, hy, bold = TRUE)
-
-  for (i in seq_len(nb)) {
-    ry <- table_top - rh * (i + 0.5)
-    put(labels_expr[[i]], 1L, ry)
-    for (j in seq_len(nvc)) put(vcols[[j]][i], j + 1L, ry)
-  }
-
-  rule <- function(yy, lwd) grid::grid.lines(
-    x = grid::unit(c(0, 1), "npc"), y = grid::unit(c(yy, yy), "npc"),
+  rule <- function(off, lwd) grid::grid.lines(
+    x = grid::unit(c(0, 1), "npc"),
+    y = grid::unit(c(ytop, ytop), "npc") - grid::unit(c(off, off), "inches"),
     gp = grid::gpar(col = c_rule, lwd = lwd))
-  rule(table_top, 1.6)               # toprule
-  rule(table_top - rh, 1.0)          # midrule
-  rule(table_top - rh * n_tot, 1.6)  # bottomrule
+
+  grid::grid.text(title, x = 0.5, y = at(lay$c_title), just = c("centre", "centre"),
+                  gp = grid::gpar(fontface = "bold", fontsize = 15,
+                                  fontfamily = ff, col = c_text))
+  grid::grid.text(meta, x = 0.5, y = at(lay$c_sub), just = c("centre", "centre"),
+                  gp = grid::gpar(fontsize = 10.5, fontfamily = ff, col = c_sub))
+
+  rule(lay$y_top, 1.6)                                  # toprule
+  put("Specification", 1L, lay$c_head, bold = TRUE)
+  for (j in seq_len(nvc)) put(vnames[j], j + 1L, lay$c_head, bold = TRUE)
+  rule(lay$y_mid, 1.0)                                  # midrule
+  for (i in seq_len(nb)) {
+    put(labels_expr[[i]], 1L, lay$c_rows[i])
+    for (j in seq_len(nvc)) put(vcols[[j]][i], j + 1L, lay$c_rows[i])
+  }
+  rule(lay$y_bot, 1.6)                                  # bottomrule
 
   invisible()
 }
@@ -444,7 +462,7 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
     max(nchar(fc$vnames[j]), max(nchar(fc$vcols[[j]]), 1L)) + 3L, integer(1)))
   tot_chars <- label_chars + 3L + val_chars
   if (is.null(width))  width  <- max(6.5, 0.092 * tot_chars + 1)
-  if (is.null(height)) height <- 0.95 + 0.34 * (nb + 1)
+  if (is.null(height)) height <- .abl_layout(nb)$content_h + 0.32
 
   if (!is.null(file)) {
     ext <- tolower(tools::file_ext(file))

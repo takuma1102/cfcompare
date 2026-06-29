@@ -11,7 +11,7 @@ compare_se_modes(
   unit,
   time,
   covariates = NULL,
-  se = c("bootstrap", "jackknife", "placebo"),
+  se = c("bootstrap", "jackknife"),
   anchor = "pooled",
   control = trop_control(),
   labels = NULL
@@ -21,9 +21,9 @@ compare_se_modes(
 \item{data, outcome, treatment, unit, time, covariates}{Passed to \code{\link[=trop]{trop()}}.}
 
 \item{se}{Character vector of inference methods to compare; any of
-\code{"bootstrap"}, \code{"jackknife"}, \code{"placebo"}. Defaults to all three. (To
-compare anchors or penalty constraints instead, see \code{\link[=trop]{trop()}}'s \code{anchor}
-argument and \code{\link[=trop_ablation]{trop_ablation()}}.)}
+\code{"bootstrap"}, \code{"jackknife"}. Defaults to both. (To compare anchors or
+penalty constraints instead, see \code{\link[=trop]{trop()}}'s \code{anchor} argument and
+\code{\link[=trop_ablation]{trop_ablation()}}.)}
 
 \item{anchor}{Weight anchoring, as in \code{\link[=trop]{trop()}} (default \code{"pooled"}).}
 
@@ -31,30 +31,31 @@ argument and \code{\link[=trop_ablation]{trop_ablation()}}.)}
 here to control the bootstrap replications.}
 
 \item{labels}{Optional \code{method} labels, one per \code{se}; defaults to
-\code{paste0("TROP_", se)}.}
+\code{"Bootstrap SE"} / \code{"Jackknife SE"}.}
 }
 \value{
-A \code{cf_att_tbl} (a \code{data.frame}) with one row per inference method,
-sharing a common point estimate. If a method does not apply to the design
-(for example jackknife with a single treated unit) it still contributes a
-row, carrying the shared estimate with \code{NA} uncertainty and an explanatory
-\code{note}.
+An object of class \code{cf_se_comparison} (extending \code{cf_att_tbl}) with one
+row per inference method, sharing a common point estimate. If a method does
+not apply to the design (for example jackknife with a single treated unit) it
+still contributes a row, carrying the shared estimate with \code{NA} uncertainty
+and an explanatory \code{note}.
 }
 \description{
-Refits the TROP estimator under several inference methods --- bootstrap,
-jackknife and/or placebo --- and returns the estimate, standard error and
-confidence interval from each on the common \code{\link[=as_att]{cf_att_tbl}} schema. The
-cross-validated penalties are chosen once (a single \code{se = "none"} fit) and
-reused for every inference method, exactly as \code{\link[=trop_ablation]{trop_ablation()}} reuses one
-fit's penalties, so the ATT is identical across rows and only the uncertainty
-changes. That is the table to reach for when checking how sensitive the
-confidence interval is to the choice of resampling scheme.
+Refits the TROP estimator under several inference methods --- the unit-level
+stratified block bootstrap and/or the leave-one-treated-unit-out jackknife ---
+and returns the estimate, standard error and confidence interval from each on
+the common \code{\link[=as_att]{cf_att_tbl}} schema. The cross-validated penalties are
+chosen once (a single \code{se = "none"} fit) and reused for every inference
+method, exactly as \code{\link[=trop_ablation]{trop_ablation()}} reuses one fit's penalties, so the ATT is
+identical across rows and only the uncertainty changes. This is the table to
+reach for when checking how sensitive the confidence interval is to the choice
+of resampling scheme --- it is an \emph{inference-mode} comparison, not an
+estimator comparison, so all rows share one point estimate by construction.
 }
 \examples{
 df <- sim_panel(N = 24, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
 \donttest{
 compare_se_modes(df, "y", "w", "id", "t",
-                 se = c("jackknife", "placebo"),
                  control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
 }
 }

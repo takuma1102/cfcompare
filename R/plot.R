@@ -195,7 +195,6 @@ autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
       bootstrap = if (!is.null(object$n_boot))
                     sprintf("Bootstrap SE (%d reps)", object$n_boot) else "Bootstrap SE",
       jackknife = "Jackknife SE",
-      placebo   = "Placebo SE",
       none      = "no SE",
       sprintf("%s SE", object$se.method))
     sub_txt <- substitute("Penalties " * lambda == lt %.% st,
@@ -291,7 +290,6 @@ autoplot.trop_event_study <- function(object, ...) {
     bootstrap = if (!is.null(object$n_boot))
                   sprintf("Bootstrap SE (%d reps)", object$n_boot) else "Bootstrap SE",
     jackknife = "Jackknife SE",
-    placebo   = "Placebo SE",
     none      = "no SE",
     sprintf("%s SE", object$se.method))
   ci_txt <- sprintf("%.0f%% pointwise CI", 100 * object$conf.level)

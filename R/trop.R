@@ -224,9 +224,8 @@
 #'   most `max_cells` treated cells and `pooled` otherwise.
 #' @param se Standard-error method: `"bootstrap"` (default; unit-level
 #'   stratified block bootstrap), `"jackknife"` (leave-one-treated-unit-out;
-#'   needs at least 2 treated units), `"placebo"` (assign the treated pattern to
-#'   controls; for a single treated unit), `"auto"` (jackknife when there are at
-#'   least 2 treated units, else placebo), or `"none"`.
+#'   needs at least 2 treated units), `"auto"` (jackknife when there are at least
+#'   2 treated units, else bootstrap), or `"none"`.
 #' @param grids Optional list of penalty grids; see [trop_control()].
 #' @param control A list of solver/CV settings from [trop_control()].
 #' @param verbose Logical; print CV progress.
@@ -246,7 +245,7 @@ trop <- function(data, outcome, treatment, unit, time,
                  covariates = NULL,
                  lambda = NULL,
                  anchor = c("auto", "per_cell", "pooled"),
-                 se = c("bootstrap", "auto", "jackknife", "placebo", "none"),
+                 se = c("bootstrap", "auto", "jackknife", "none"),
                  grids = NULL,
                  control = trop_control(),
                  verbose = FALSE) {
@@ -303,7 +302,7 @@ trop <- function(data, outcome, treatment, unit, time,
   est <- .trop_att(Y, W, lam, control, anchor, pat, X = X)
 
   if (identical(se, "auto")) {
-    se <- if (pat$n_treated_units >= 2) "jackknife" else "placebo"
+    se <- if (pat$n_treated_units >= 2) "jackknife" else "bootstrap"
   }
   inf <- .trop_se(Y, W, lam, control, anchor, pat, est, se, conf_level, X = X)
 
@@ -406,7 +405,7 @@ trop <- function(data, outcome, treatment, unit, time,
        phi = phi)
 }
 
-#' Standard errors for the TROP ATT (jackknife / placebo).
+#' Standard errors for the TROP ATT (jackknife / bootstrap).
 #' @keywords internal
 #' @noRd
 .trop_se <- function(Y, W, lam, ctrl, anchor, pat, est, method, conf_level,
@@ -475,21 +474,8 @@ trop <- function(data, outcome, treatment, unit, time,
     }
     return(list(se = se, conf.low = est$att - z * se,
                 conf.high = est$att + z * se, n_boot = length(boot)))
-  } else { # placebo
-    controls <- setdiff(seq_len(nrow(Y)), pat$treated_units)
-    if (length(controls) < 2) return(na_out)
-    treat_pattern <- W[pat$treated_units, , drop = FALSE]
-    # replicate the treated cells' time pattern onto each control unit
-    tcols <- which(colSums(treat_pattern) > 0)
-    par <- (ctrl$workers %||% 1L) > 1L
-    placebo <- unlist(.par_lapply(seq_along(controls), function(k) {
-      ci <- controls[k]
-      Wp <- matrix(0, nrow(Y), ncol(Y), dimnames = dimnames(Y))
-      Wp[ci, tcols] <- 1
-      patp <- .assignment_pattern(Wp)
-      .trop_att(Y, Wp, lam, ctrl, anchor, patp, X = X)$att
-    }, parallel = par), use.names = FALSE)
-    se <- stats::sd(placebo)
+  } else {
+    return(na_out)
   }
   list(se = se,
        conf.low = est$att - z * se,
@@ -515,7 +501,7 @@ trop <- function(data, outcome, treatment, unit, time,
 #'   R `svd()`. The two agree to numerical tolerance; `"truncated"` is faster on
 #'   large panels, `"full"` is used for exact numerical-agreement checks.
 #' @param workers Number of parallel workers for the embarrassingly parallel
-#'   loops (cross-validation cells, and the bootstrap / jackknife / placebo
+#'   loops (cross-validation cells, and the bootstrap / jackknife
 #'   replicates). `1` (default) runs serially. Values `> 1` use
 #'   `future.apply`/`future` when installed (a transient `multisession` plan is
 #'   set up and restored automatically); if those packages are missing it falls
@@ -616,7 +602,7 @@ print.trop <- function(x, ...) {
        n = stats::setNames(as.integer(cnt), names(cnt)))
 }
 
-#' Per-event-time standard errors (jackknife / bootstrap / placebo).
+#' Per-event-time standard errors (jackknife / bootstrap).
 #'
 #' Mirrors `.trop_se()` but, instead of collapsing each resample to a single
 #' ATT, records the vector of period effects and aggregates it by event time.
@@ -703,22 +689,8 @@ print.trop <- function(x, ...) {
                 n_boot = max(nfin)))
   }
 
-  # placebo
-  controls <- setdiff(seq_len(nrow(Y)), pat$treated_units)
-  if (length(controls) < 2) return(empty())
-  tcols <- which(colSums(W[pat$treated_units, , drop = FALSE]) > 0)
-  reps <- .par_lapply(seq_along(controls), function(k) {
-    ci <- controls[k]
-    Wp <- matrix(0, nrow(Y), ncol(Y), dimnames = dimnames(Y))
-    Wp[ci, tcols] <- 1
-    patp <- .assignment_pattern(Wp)
-    to_row(.trop_period_effects(Y, Wp, lam, ctrl, patp, pre_periods,
-                                X = X)$effect)
-  }, parallel = par)
-  M <- do.call(rbind, reps); se <- col_sd(M)
-  list(se = stats::setNames(se, ev),
-       conf.low = stats::setNames(point - z * se, ev),
-       conf.high = stats::setNames(point + z * se, ev), n_boot = NULL)
+  # any other method (e.g. "none") -> no pointwise standard errors
+  return(empty())
 }
 
 #' Per-period (event-study) effects from a TROP fit
@@ -740,8 +712,7 @@ print.trop <- function(x, ...) {
 #' @param object A `trop` fit from [trop()].
 #' @param se Standard-error method for the per-period effects: `"bootstrap"`
 #'   (default; unit-level stratified block bootstrap), `"jackknife"`
-#'   (leave-one-treated-unit-out; needs at least 2 treated units), `"placebo"` (assign
-#'   the treated pattern to controls), or `"none"`.
+#'   (leave-one-treated-unit-out; needs at least 2 treated units), or `"none"`.
 #' @param pre_periods Logical; include pre-treatment event times as placebo /
 #'   pre-trend points (default `TRUE`).
 #' @param control A list of solver/CV/bootstrap settings from [trop_control()];
@@ -766,7 +737,7 @@ print.trop <- function(x, ...) {
 #' }
 #' @export
 trop_event_study <- function(object,
-                             se = c("bootstrap", "jackknife", "placebo", "none"),
+                             se = c("bootstrap", "jackknife", "none"),
                              pre_periods = TRUE, control = NULL, ...) {
   stopifnot(inherits(object, "trop"))
   se <- match.arg(se)
@@ -819,7 +790,7 @@ print.trop_event_study <- function(x, digits = 4, ...) {
   se_lab <- switch(x$se.method %||% "none",
     bootstrap = if (!is.null(x$n_boot))
                   sprintf("bootstrap (%d reps)", x$n_boot) else "bootstrap",
-    jackknife = "jackknife", placebo = "placebo", none = "none",
+    jackknife = "jackknife", none = "none",
     x$se.method)
   cat(sprintf("  SE: %s; %.0f%% pointwise CI\n", se_lab, 100 * x$conf.level))
   print(format(est, digits = digits), row.names = FALSE)

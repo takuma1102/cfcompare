@@ -13,7 +13,7 @@ trop(
   covariates = NULL,
   lambda = NULL,
   anchor = c("auto", "per_cell", "pooled"),
-  se = c("bootstrap", "auto", "jackknife", "placebo", "none"),
+  se = c("bootstrap", "auto", "jackknife", "none"),
   grids = NULL,
   control = trop_control(),
   verbose = FALSE
@@ -46,9 +46,8 @@ most \code{max_cells} treated cells and \code{pooled} otherwise.}
 
 \item{se}{Standard-error method: \code{"bootstrap"} (default; unit-level
 stratified block bootstrap), \code{"jackknife"} (leave-one-treated-unit-out;
-needs at least 2 treated units), \code{"placebo"} (assign the treated pattern to
-controls; for a single treated unit), \code{"auto"} (jackknife when there are at
-least 2 treated units, else placebo), or \code{"none"}.}
+needs at least 2 treated units), \code{"auto"} (jackknife when there are at least
+2 treated units, else bootstrap), or \code{"none"}.}
 
 \item{grids}{Optional list of penalty grids; see \code{\link[=trop_control]{trop_control()}}.}
 

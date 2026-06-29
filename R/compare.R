@@ -36,7 +36,7 @@ panel_compare <- function(data, outcome, treatment, unit, time,
                           methods = c("DID", "SDID", "MC", "TROP", "DIFP"),
                           exclude = NULL,
                           anchor = "auto",
-                          se = c("auto", "jackknife", "bootstrap", "placebo", "none"),
+                          se = c("auto", "jackknife", "bootstrap", "none"),
                           control = trop_control(),
                           verbose = FALSE) {
   se <- match.arg(se)
