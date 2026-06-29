@@ -63,6 +63,11 @@ cmp <- panel_compare(
 
 cmp$att                    # tidy ATT table, one row per method
 autoplot(cmp)              # forest plot of ATT estimates and intervals
+```
+
+<img src="man/figures/compare_forest.png" alt="Forest plot of ATT estimators" />
+
+```r
 plot_counterfactual(cmp)   # observed vs fitted untreated paths
 ```
 
@@ -95,6 +100,7 @@ TROP. `cfcompare` adds an R-native comparison and diagnostic layer around TROP:
 | --- | --- | --- |
 | Compare multiple ATT estimators | `panel_compare()` | `cf_comparison` with a common `cf_att_tbl`, fits, panel data, and counterfactuals |
 | Compare held-out predictive performance | `panel_rmse()` | ranked RMSE table; this is separate from TROP tuning cross-validation |
+| Track estimation RMSE vs design size | `rmse_curve()` / `rmse_curves()` | `sqrt(E[(tau_hat - tau)^2])` vs N, T, #treated, or #post, with a known true ATT |
 | Inspect TROP penalty sensitivity | `trop_sensitivity()` + `autoplot()` | lambda grid with CV loss and ATT at each grid point |
 | Plot CV-loss / ATT surfaces | `plot_trop_surfaces()` | separate full-width CV-loss and ATT surface plots; returns surface matrices invisibly |
 | Audit penalty components | `trop_ablation()` | table moving from full TROP toward MC and DID by constraining penalties |
@@ -121,6 +127,12 @@ autoplot(r)  # lower RMSE is better
 
 For large panels, reduce `n_runs` and TROP CV work, for example through
 `trop_control(n_cv_cells = , cv_cycles = )`.
+
+> **Note**: This is a **predictive** error on held-out cells, not estimation error against a
+> known effect. It is a different quantity from the *estimation* RMSE `sqrt(E[(tau_hat - tau)^2])` reported by `rmse_curve()` / `rmse_curves()` over
+> Monte Carlo replications with a known true ATT. In short: `panel_rmse()` asks
+> "how well does each method predict outcomes it never saw?", while `rmse_curve()`
+> asks "how close is each method's ATT to the truth as the design changes?" — and the two can rank methods differently.
 
 ## TROP diagnostics
 
