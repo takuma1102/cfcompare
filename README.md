@@ -42,7 +42,7 @@ install.packages(
 )
 ```
 
-The core native engines run without optional estimator packages. Install
+Most of the core native engines run without optional estimator packages. Install
 `synthdid`, `gsynth`, `augsynth`, or `did` for the wrapped methods you plan
 to use.
 
@@ -55,7 +55,7 @@ library(cfcompare)
 cmp <- panel_compare(
   df,
   outcome = "y", treatment = "w", unit = "id", time = "t",
-  methods = c("DID", "SDID", "MC", "TROP", "DIFP"),
+  methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
   se = "bootstrap"
 )
 
@@ -89,10 +89,9 @@ from the default set. Optional engines whose package is missing, or whose design
 requirements are not met, are skipped with a message while the remaining methods
 still run.
 
-## What cfcompare adds around TROP
+## What cfcompare can do
 
-The official Python and Stata projects are the reference software for estimating
-TROP. `cfcompare` adds an R-native comparison and diagnostic layer around TROP:
+`cfcompare` has basic functions for estimating the TROP estimator (the official Python and Stata projects are referenced). It also adds an R-native comparison and diagnostic layer around TROP:
 
 | Goal | Entry point | Output |
 | --- | --- | --- |
@@ -123,7 +122,7 @@ r            # ranked table: method, rmse, rmse_se, engine, note
 autoplot(r)  # lower RMSE is better
 ```
 
-For large panels, reduce `n_runs` and TROP CV work, for example through
+For quick diagnosis using large panels, reduce `n_runs` and TROP CV work, for example through
 `trop_control(n_cv_cells = , cv_cycles = )`.
 
 > **Note**: This is a **predictive** error on held-out cells, not estimation error against a
@@ -188,15 +187,15 @@ package on exactly comparable weighted-TWFE special cases, using
 `trop_control(svd = "full")`; the results agree to numerical tolerance.
 `trop_matrix()` provides a matrix-in interface for direct cross-checks.
 
-Two differences are deliberate. First, `cfcompare`'s default `trop()` uses the
-paper's general unit/time distances, so it applies beyond simple block designs.
-Second, finite nuclear-norm penalties are solved with a proximal-gradient
-soft-impute routine, so exact digits need not match convex-solver implementations
-outside the comparable special cases.
+> Technical note: There are two differences for this package's estimation. First, `cfcompare`'s default `trop()` uses the
+> paper's general unit/time distances, so it applies beyond simple block designs.
+> Second, finite nuclear-norm penalties are solved with a proximal-gradient
+> soft-impute routine, so exact digits need not match convex-solver implementations
+> outside the comparable special cases.
 
-## More detail
+## More details
 
-The README is intentionally short. For details, use the package help topics:
+For more details, use the package help topics:
 
 ```r
 ?panel_compare
@@ -218,13 +217,12 @@ code.
 
 ## Citation
 
-`cfcompare` is an unofficial implementation. If you use the TROP estimator,
-please cite the paper:
+`cfcompare` is an independent implementation of TROP. If you use the TROP estimator,
+please cite the original paper:
 
 - Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026). *Triply Robust Panel
   Estimators.* Journal of Applied Econometrics, 1--16.
-  [doi:10.1002/jae.70061](https://doi.org/10.1002/jae.70061). Working-paper
-  version: [arXiv:2508.21536](https://arxiv.org/abs/2508.21536).
+  [doi:10.1002/jae.70061](https://doi.org/10.1002/jae.70061).
 
 Also cite the underlying packages for any wrapped estimators you use
 (`synthdid`, `gsynth`, `augsynth`, and `did`).
