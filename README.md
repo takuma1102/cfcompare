@@ -83,7 +83,7 @@ plot_counterfactual(cmp)   # observed vs fitted untreated paths
 | `augsynth` | `augsynth` | no | optional augmented synthetic control engine |
 | `CS` | `did` | no | Callaway--Sant'Anna; requires an absorbing staggered/block treatment |
 
-By default, `panel_compare()` runs `TROP`, `DID`, `MC`, `SDID`, and `DIFP`.
+By default, `panel_compare()` runs `TROP`, `DID`, `SC`, `MC`, `SDID`, and `DIFP`.
 Use `methods =` to specify an explicit set, or `exclude =` to drop one method
 from the default set. Optional engines whose package is missing, or whose design
 requirements are not met, are skipped with a message while the remaining methods
