@@ -77,8 +77,8 @@ cmp$att
 ```
 
 Here `methods` was given explicitly. If you omit it, `panel_compare()` runs its
-default set --- `DID`, `SDID`, `MC`, `TROP`, and `DIFP` (the native engines plus
-synthetic DID). To run the defaults without a particular method, pass `exclude`
+default set --- `TROP`, `DID`, `SC`, `MC`, `SDID`, and `DIFP` (the native engines
+plus synthetic DID and synthetic control). To run the defaults without a particular method, pass `exclude`
 rather than retyping the list, e.g. `panel_compare(..., exclude = "DIFP")`. The
 same `methods` / `exclude` arguments work in `panel_rmse()` and `rmse_curve()`.
 

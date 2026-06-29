@@ -10,7 +10,7 @@ panel_compare(
   treatment,
   unit,
   time,
-  methods = c("DID", "SDID", "MC", "TROP", "DIFP"),
+  methods = c("TROP", "DID", "SC", "MC", "SDID", "DIFP"),
   exclude = NULL,
   anchor = "auto",
   se = c("auto", "jackknife", "bootstrap", "none"),
@@ -27,7 +27,7 @@ staggered, and non-absorbing designs).}
 
 \item{methods}{Character vector of methods to run. Any of \code{"DID"}, \code{"SDID"},
 \code{"SC"}, \code{"MC"}, \code{"DIFP"}, \code{"TROP"}, \code{"gsynth"}, \code{"augsynth"}, \code{"CS"}.
-Defaults to the native engines plus SDID: \code{c("DID", "SDID", "MC", "TROP", "DIFP")}.}
+Defaults to the native engines plus SDID and SC: \code{c("TROP", "DID", "SC", "MC", "SDID", "DIFP")}.}
 
 \item{exclude}{Optional character vector of methods to drop from \code{methods}
 (after defaults are applied). Convenient for running "everything except one",

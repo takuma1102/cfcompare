@@ -14,8 +14,8 @@
 #' @inheritParams trop
 #' @param methods Character vector of methods to run. Any of `"DID"`, `"SDID"`,
 #'   `"SC"`, `"MC"`, `"DIFP"`, `"TROP"`, `"gsynth"`, `"augsynth"`, `"CS"`.
-#'   Defaults to the native engines plus SDID: `c("DID", "SDID", "MC", "TROP",
-#'   "DIFP")`.
+#'   Defaults to the native engines plus SDID and SC: `c("TROP", "DID", "SC",
+#'   "MC", "SDID", "DIFP")`.
 #' @param exclude Optional character vector of methods to drop from `methods`
 #'   (after defaults are applied). Convenient for running "everything except one",
 #'   e.g. `exclude = "DIFP"`. Unknown names are ignored with a warning.
@@ -33,7 +33,7 @@
 #' cmp$att
 #' @export
 panel_compare <- function(data, outcome, treatment, unit, time,
-                          methods = c("DID", "SDID", "MC", "TROP", "DIFP"),
+                          methods = c("TROP", "DID", "SC", "MC", "SDID", "DIFP"),
                           exclude = NULL,
                           anchor = "auto",
                           se = c("auto", "jackknife", "bootstrap", "none"),
