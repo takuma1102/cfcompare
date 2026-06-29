@@ -16,7 +16,11 @@ trop_ablation(
   control = trop_control(),
   anchor = "pooled",
   se = "none",
-  lambda_full = NULL
+  lambda_full = NULL,
+  rmse = FALSE,
+  horizon = NULL,
+  n_pseudo = NULL,
+  n_runs = 200L
 )
 
 \method{print}{trop_ablation}(x, digits = 3, ...)
@@ -36,6 +40,20 @@ standard error and confidence interval appear in the table.}
 
 \item{lambda_full}{Optional named list \code{list(time=, unit=, nn=)} to fix the
 full specification's penalties and skip cross-validation.}
+
+\item{rmse}{Logical; if \code{TRUE}, also score each specification by a placebo
+RMSE. A pseudo block-treatment (true effect zero) is assigned to control
+units, every specification is refit at its penalties, and the RMSE is
+\code{sqrt(mean(estimate^2))} over \code{n_runs} draws. The same draws are scored under
+every specification, so the relative RMSE with TROP (full) = 1 is the
+quantity reported in Table 5 of the paper. Adds \code{rmse} and \code{rmse_rel}
+columns, and makes \code{plot()} show the (relative) RMSE instead of the ATT.}
+
+\item{horizon, n_pseudo}{Placebo design used when \code{rmse = TRUE}: the number of
+final periods to pseudo-treat and the number of pseudo-treated control
+units. Default to the real design's post length and treated-unit count.}
+
+\item{n_runs}{Number of placebo draws when \code{rmse = TRUE}.}
 
 \item{x}{A \code{trop_ablation} object.}
 
@@ -57,6 +75,8 @@ rows and columns.}
 An object of class \code{trop_ablation} (a \code{data.frame}) with one row per
 specification: \code{spec}, the three penalties \code{lambda_time}/\code{lambda_unit}/
 \code{lambda_nn}, \code{estimate}, \code{std.error}, \code{conf.low}/\code{conf.high}, and \code{rank}.
+When \code{rmse = TRUE} it also has \code{rmse} and \code{rmse_rel} (RMSE relative to the
+full TROP).
 }
 \description{
 Refits TROP under a sequence of penalty constraints to show how the ATT moves

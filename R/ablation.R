@@ -27,9 +27,22 @@
 #'   standard error and confidence interval appear in the table.
 #' @param lambda_full Optional named list `list(time=, unit=, nn=)` to fix the
 #'   full specification's penalties and skip cross-validation.
+#' @param rmse Logical; if `TRUE`, also score each specification by a placebo
+#'   RMSE. A pseudo block-treatment (true effect zero) is assigned to control
+#'   units, every specification is refit at its penalties, and the RMSE is
+#'   `sqrt(mean(estimate^2))` over `n_runs` draws. The same draws are scored under
+#'   every specification, so the relative RMSE with TROP (full) = 1 is the
+#'   quantity reported in Table 5 of the paper. Adds `rmse` and `rmse_rel`
+#'   columns, and makes `plot()` show the (relative) RMSE instead of the ATT.
+#' @param horizon,n_pseudo Placebo design used when `rmse = TRUE`: the number of
+#'   final periods to pseudo-treat and the number of pseudo-treated control
+#'   units. Default to the real design's post length and treated-unit count.
+#' @param n_runs Number of placebo draws when `rmse = TRUE`.
 #' @return An object of class `trop_ablation` (a `data.frame`) with one row per
 #'   specification: `spec`, the three penalties `lambda_time`/`lambda_unit`/
 #'   `lambda_nn`, `estimate`, `std.error`, `conf.low`/`conf.high`, and `rank`.
+#'   When `rmse = TRUE` it also has `rmse` and `rmse_rel` (RMSE relative to the
+#'   full TROP).
 #' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
 #'   Triply Robust Panel Estimators. arXiv:2508.21536.
 #' @seealso [trop()]; `format()` for paste-ready LaTeX/Markdown output
@@ -47,7 +60,11 @@ trop_ablation <- function(data, outcome, treatment, unit, time,
                           control = trop_control(),
                           anchor = "pooled",
                           se = "none",
-                          lambda_full = NULL) {
+                          lambda_full = NULL,
+                          rmse = FALSE,
+                          horizon = NULL,
+                          n_pseudo = NULL,
+                          n_runs = 200L) {
   fit_full <- trop(data, outcome, treatment, unit, time,
                    covariates = covariates, lambda = lambda_full,
                    anchor = anchor, se = se, control = control)
@@ -91,6 +108,49 @@ trop_ablation <- function(data, outcome, treatment, unit, time,
 
   out <- do.call(rbind, lapply(specs, one))
   rownames(out) <- NULL
+
+  if (isTRUE(rmse)) {
+    pm <- .panel_to_matrices(data, outcome, treatment, unit, time)
+    Ym <- pm$Y; Wm <- pm$W
+    controls <- which(rowSums(Wm) == 0)
+    treated  <- which(rowSums(Wm) > 0)
+    if (length(controls) < 2L)
+      stop("rmse = TRUE needs at least two control units.", call. = FALSE)
+    Tt <- ncol(Ym)
+    if (is.null(horizon))
+      horizon <- max(1L, sum(colSums(Wm[treated, , drop = FALSE]) > 0))
+    horizon <- min(horizon, Tt - 1L)
+    if (is.null(n_pseudo))
+      n_pseudo <- max(1L, min(length(treated), length(controls) - 1L))
+    n_pseudo <- min(n_pseudo, length(controls) - 1L)
+    held <- utils::tail(seq_len(Tt), horizon)
+    Yc <- Ym[controls, , drop = FALSE]; ncy <- nrow(Yc)
+    # placebo-ATT RMSE (true effect 0): assign a pseudo block-treatment to control
+    # units and score each penalty spec by sqrt(mean(estimate^2)). The SAME pseudo
+    # draws are scored under every spec, so the ratios are paired -- the relative
+    # RMSE with TROP (full) = 1 is the Table-5 quantity of the paper.
+    if (!is.null(control$seed)) set.seed(control$seed)
+    ps_list <- lapply(seq_len(n_runs), function(r) sample(seq_len(ncy), n_pseudo))
+    lam_list <- lapply(specs, `[[`, "lambda")
+    err <- matrix(NA_real_, nrow = n_runs, ncol = length(specs))
+    for (r in seq_len(n_runs)) {
+      Wp <- matrix(0, ncy, Tt, dimnames = dimnames(Yc))
+      Wp[ps_list[[r]], held] <- 1
+      patp <- .assignment_pattern(Wp)
+      for (j in seq_along(lam_list))
+        err[r, j] <- tryCatch(
+          .trop_att(Yc, Wp, lam_list[[j]], control, "pooled", patp)$att,
+          error = function(e) NA_real_)
+    }
+    rmse_vec <- sqrt(colMeans(err^2, na.rm = TRUE))
+    full_idx <- which(vapply(specs, function(s) identical(s$key, "full"),
+                             logical(1)))
+    out$rmse     <- rmse_vec
+    out$rmse_rel <- rmse_vec / rmse_vec[full_idx]
+    attr(out, "rmse_runs")     <- n_runs
+    attr(out, "rmse_horizon")  <- horizon
+    attr(out, "rmse_n_pseudo") <- n_pseudo
+  }
   attr(out, "outcome") <- outcome
   attr(out, "anchor")  <- anchor
   attr(out, "se")      <- fit_full$se.method
@@ -127,6 +187,10 @@ trop_ablation <- function(data, outcome, treatment, unit, time,
     lo <- .abl_num(x$conf.low,  digits, inf)
     hi <- .abl_num(x$conf.high, digits, inf)
     cols[["95% CI"]] <- ifelse(lo == "" | hi == "", "", ci_fmt(lo, hi))
+  }
+  if (!is.null(x$rmse)) {
+    cols$RMSE <- .abl_num(x$rmse, digits, inf)
+    cols[["vs TROP"]] <- .abl_num(x$rmse_rel, digits, inf)
   }
   cols$`rank(L)` <- ifelse(is.na(x$rank), "", as.character(x$rank))
   cols
@@ -186,6 +250,7 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
                   ATT = "ATT", SE = "SE",
                   "95% CI" = paste0(round(100 * (attr(x, "conf.level") %||% 0.95)),
                                     "% CI"),
+                  RMSE = "RMSE", "vs TROP" = "RMSE/TROP",
                   "rank(L)" = "rank(L)")
     hdr <- ifelse(nm %in% names(head_map), head_map[nm], nm)
     align <- ifelse(nm == "Specification", ":--", "--:")
@@ -206,6 +271,8 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
       "ATT" = "ATT",
       "SE" = "SE",
       "95% CI" = paste0(conf, "\\% CI"),
+      "RMSE" = "RMSE",
+      "vs TROP" = "RMSE$/$TROP",
       "rank(L)" = "rank($L$)")
     headers <- ifelse(nm %in% names(head_map), head_map[nm], nm)
     # left-align the label column, right-align the rest
@@ -230,75 +297,137 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
 
 # ---- figure output ----------------------------------------------------------
 
-# Pure-grid renderer for the ablation table (no gridExtra/gt/Chrome needed, so
-# it works on any R install and on a headless machine). Draws onto the current
-# device/page; .render_ablation() opens a file device around it when asked.
+# Row label: human name + the penalty constraint that defines the specification
+# (so "DID-like"/"MC-like" are explained the way Table 5 of the paper does it).
+# Returns a plotmath expression so lambda renders as a proper Greek symbol.
+#' @keywords internal
+#' @noRd
+.abl_label_expr <- function(spec) {
+  switch(spec,
+    "TROP (full)"               = "TROP (full)",
+    "No regression adjustment"  =
+      bquote("No regression adj.  (" * lambda[nn] * " = " * infinity * ")"),
+    "No unit weights"           =
+      bquote("No unit weights  (" * lambda[unit] * " = 0)"),
+    "No time weights"           =
+      bquote("No time weights  (" * lambda[time] * " = 0)"),
+    "Matrix completion"         =
+      bquote("MC-like  (" * lambda[unit] * " = " * lambda[time] * " = 0)"),
+    "Difference-in-differences" =
+      bquote("DID-like  (" * lambda[unit] * " = " * lambda[time] *
+             " = 0, " * lambda[nn] * " = " * infinity * ")"),
+    spec)
+}
+
+# ASCII stand-in used only to size the label column.
+#' @keywords internal
+#' @noRd
+.abl_label_plain <- function(spec) {
+  switch(spec,
+    "No regression adjustment"  = "No regression adj.  (l_nn = Inf)",
+    "No unit weights"           = "No unit weights  (l_unit = 0)",
+    "No time weights"           = "No time weights  (l_time = 0)",
+    "Matrix completion"         = "MC-like  (l_unit = l_time = 0)",
+    "Difference-in-differences" = "DID-like  (l_unit = l_time = 0, l_nn = Inf)",
+    spec)
+}
+
+# Shared column spec used by both the renderer and the auto-sizer: a left label
+# column plus the value columns (RMSE when available, otherwise the ATT block).
+#' @keywords internal
+#' @noRd
+.abl_fig_cols <- function(x, digits = 3) {
+  num <- function(v) .abl_num(v, digits, inf = "Inf")
+  vcols <- list()
+  if (!is.null(x$rmse)) {
+    vcols[["RMSE"]]    <- num(x$rmse)
+    vcols[["vs TROP"]] <- num(x$rmse_rel)
+  } else {
+    vcols[["ATT"]] <- num(x$estimate)
+    if (any(is.finite(x$std.error))) {
+      vcols[["SE"]] <- num(x$std.error)
+      lo <- num(x$conf.low); hi <- num(x$conf.high)
+      vcols[["95% CI"]] <- ifelse(lo == "" | hi == "", "",
+                                  sprintf("[%s, %s]", lo, hi))
+    }
+  }
+  vcols[["rank(L)"]] <- ifelse(is.na(x$rank), "", as.character(x$rank))
+  list(
+    labels_expr  = lapply(x$spec, .abl_label_expr),
+    labels_plain = vapply(x$spec, .abl_label_plain, character(1)),
+    vnames = names(vcols),
+    vcols  = vcols
+  )
+}
+
+# Pure-grid renderer (no gridExtra/gt/Chrome, so it works headless). Booktabs
+# style after the paper: serif type, centred title/subtitle, no shading, three
+# rules. Draws onto the current device; .render_ablation() opens a file device.
 #' @keywords internal
 #' @noRd
 .draw_trop_ablation <- function(x, digits = 3) {
-  cols <- .abl_columns(x, digits, inf = "Inf",
-                       ci_fmt = function(lo, hi) sprintf("[%s, %s]", lo, hi))
-  key  <- names(cols)
-  hdr  <- key
-  hdr[key == "lt"] <- "lambda_time"
-  hdr[key == "lu"] <- "lambda_unit"
-  hdr[key == "ln"] <- "lambda_nn"
-  align <- ifelse(key == "Specification", "l", "r")
-  body  <- lapply(cols, as.character)
-  nc <- length(body); nb <- length(body[[1]])
+  fc <- .abl_fig_cols(x, digits)
+  labels_expr <- fc$labels_expr; vnames <- fc$vnames; vcols <- fc$vcols
+  nb <- nrow(x); nvc <- length(vcols)
+  has_rmse <- !is.null(x$rmse)
 
-  charw <- vapply(seq_len(nc), function(j)
-    max(nchar(hdr[j]), max(nchar(body[[j]]), 1L)), integer(1)) + 2L
-  wfrac <- charw / sum(charw)
+  label_w <- max(nchar(fc$labels_plain), nchar("Specification"))
+  vw <- vapply(seq_len(nvc), function(j)
+    max(nchar(vnames[j]), max(nchar(vcols[[j]]), 1L)), integer(1))
+  wrel  <- c(label_w, vw) + 3L
+  wfrac <- wrel / sum(wrel)
   xr <- cumsum(wfrac); xl <- xr - wfrac
 
   title <- "TROP penalty ablation"
-  subtitle <- sprintf("outcome: %s    anchor: %s    SE: %s",
-                      attr(x, "outcome") %||% "?", attr(x, "anchor") %||% "?",
-                      attr(x, "se") %||% "none")
+  meta <- sprintf("outcome: %s    anchor: %s",
+                  attr(x, "outcome") %||% "?", attr(x, "anchor") %||% "?")
+  meta <- if (has_rmse)
+    sprintf("%s    placebo RMSE over %s runs (TROP = 1.00)",
+            meta, attr(x, "rmse_runs") %||% NA)
+  else
+    sprintf("%s    SE: %s", meta, attr(x, "se") %||% "none")
+  substr(meta, 1L, 1L) <- toupper(substr(meta, 1L, 1L))   # capitalised opener
 
-  c_head_bg <- "#2b3a55"; c_head_fg <- "white"
-  c_stripe  <- "#eef1f6"; c_rule <- "#9aa6bd"; c_text <- "#1d2740"
+  c_rule <- "#222222"; c_text <- "#111111"; c_sub <- "#555555"; ff <- "serif"
 
   grid::grid.newpage()
-  grid::pushViewport(grid::viewport(width = 0.94, height = 0.92))
+  grid::pushViewport(grid::viewport(width = 0.92, height = 0.9))
   on.exit(grid::popViewport(), add = TRUE)
 
-  top_title <- 0.17
-  table_top <- 1 - top_title
+  table_top <- 1 - 0.18
   n_tot <- nb + 1L
   rh <- table_top / n_tot
 
-  grid::grid.text(title, x = 0, y = 0.98, just = c("left", "top"),
-                  gp = grid::gpar(fontface = "bold", fontsize = 14, col = c_text))
-  grid::grid.text(subtitle, x = 0, y = 0.98 - 0.075, just = c("left", "top"),
-                  gp = grid::gpar(fontsize = 9.5, col = "#5a6477"))
+  grid::grid.text(title, x = 0.5, y = 0.99, just = c("centre", "top"),
+                  gp = grid::gpar(fontface = "bold", fontsize = 15,
+                                  fontfamily = ff, col = c_text))
+  grid::grid.text(meta, x = 0.5, y = 0.99 - 0.085, just = c("centre", "top"),
+                  gp = grid::gpar(fontsize = 10.5, fontfamily = ff, col = c_sub))
 
-  cell_x <- function(j) if (align[j] == "l")
-    grid::unit(xl[j], "npc") + grid::unit(4, "pt") else
-    grid::unit(xr[j], "npc") - grid::unit(4, "pt")
-  cell_just <- function(j) c(if (align[j] == "l") "left" else "right", "centre")
+  xpos <- function(j) if (j == 1L) grid::unit(xl[1], "npc") else
+    grid::unit(xr[j], "npc") - grid::unit(2, "pt")
+  jjust <- function(j) if (j == 1L) c("left", "centre") else c("right", "centre")
+  put <- function(lbl, j, y, bold = FALSE)
+    grid::grid.text(lbl, x = xpos(j), y = y, just = jjust(j),
+                    gp = grid::gpar(fontsize = 11, fontfamily = ff, col = c_text,
+                                    fontface = if (bold) "bold" else "plain"))
 
   hy <- table_top - rh / 2
-  grid::grid.rect(x = 0.5, y = hy, width = 1, height = rh,
-                  gp = grid::gpar(fill = c_head_bg, col = NA))
-  for (j in seq_len(nc))
-    grid::grid.text(hdr[j], x = cell_x(j), y = hy, just = cell_just(j),
-                    gp = grid::gpar(col = c_head_fg, fontface = "bold", fontsize = 10))
+  put("Specification", 1L, hy, bold = TRUE)
+  for (j in seq_len(nvc)) put(vnames[j], j + 1L, hy, bold = TRUE)
 
   for (i in seq_len(nb)) {
     ry <- table_top - rh * (i + 0.5)
-    if (i %% 2L == 0L)
-      grid::grid.rect(x = 0.5, y = ry, width = 1, height = rh,
-                      gp = grid::gpar(fill = c_stripe, col = NA))
-    for (j in seq_len(nc))
-      grid::grid.text(body[[j]][i], x = cell_x(j), y = ry, just = cell_just(j),
-                      gp = grid::gpar(fontsize = 9.5, col = c_text,
-                                      fontfamily = if (align[j] == "r") "mono" else ""))
+    put(labels_expr[[i]], 1L, ry)
+    for (j in seq_len(nvc)) put(vcols[[j]][i], j + 1L, ry)
   }
 
-  for (yy in c(table_top, table_top - rh, table_top - rh * n_tot))
-    grid::grid.lines(x = c(0, 1), y = yy, gp = grid::gpar(col = c_rule, lwd = 1.2))
+  rule <- function(yy, lwd) grid::grid.lines(
+    x = grid::unit(c(0, 1), "npc"), y = grid::unit(c(yy, yy), "npc"),
+    gp = grid::gpar(col = c_rule, lwd = lwd))
+  rule(table_top, 1.6)               # toprule
+  rule(table_top - rh, 1.0)          # midrule
+  rule(table_top - rh * n_tot, 1.6)  # bottomrule
 
   invisible()
 }
@@ -308,12 +437,13 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
 #' @noRd
 .render_ablation <- function(x, file = NULL, width = NULL, height = NULL,
                              res = 200, digits = 3) {
-  cols <- .abl_columns(x, digits, inf = "Inf",
-                       ci_fmt = function(lo, hi) sprintf("[%s, %s]", lo, hi))
+  fc <- .abl_fig_cols(x, digits)
   nb <- nrow(x)
-  tot_chars <- sum(vapply(cols, function(z) max(nchar(z), 6L), integer(1))) +
-    2L * length(cols)
-  if (is.null(width))  width  <- max(6, 0.10 * tot_chars + 1)
+  label_chars <- max(nchar(fc$labels_plain), nchar("Specification"))
+  val_chars <- sum(vapply(seq_along(fc$vcols), function(j)
+    max(nchar(fc$vnames[j]), max(nchar(fc$vcols[[j]]), 1L)) + 3L, integer(1)))
+  tot_chars <- label_chars + 3L + val_chars
+  if (is.null(width))  width  <- max(6.5, 0.092 * tot_chars + 1)
   if (is.null(height)) height <- 0.95 + 0.34 * (nb + 1)
 
   if (!is.null(file)) {
