@@ -141,9 +141,10 @@ effects, or the fitted untreated counterfactual matrix.
 
 ```r
 fit <- trop(df, "y", "w", "id", "t")
-fit$lambda
-fit$tau_cells
-counterfactual_matrix(fit)
+fit$lambda                  # CV-selected (time, unit, nn) penalties
+fit$tau_cells               # per-treated-cell effects
+counterfactual_matrix(fit)  # fitted N x T untreated-outcome matrix
+autoplot(fit)               # synthetic-control-style trajectory
 ```
 
 Inspect the TROP penalty surface by sweeping any two of the three penalties
