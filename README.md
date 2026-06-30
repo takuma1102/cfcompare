@@ -179,6 +179,8 @@ trop_ablation(df, "y", "w", "id", "t")
 compare_se_modes(df, "y", "w", "id", "t", se = c("bootstrap", "jackknife"))
 ```
 
+<img src="man/figures/trop_ablation.png" alt="Ablation Table" />
+
 ```r
 trop_event_study(fit, se = "bootstrap")
 ```
