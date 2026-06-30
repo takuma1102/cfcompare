@@ -114,13 +114,15 @@ scores per-cell counterfactual prediction error through `counterfactual_matrix()
 ```r
 r <- panel_rmse(
   df, outcome = "y", treatment = "w", unit = "id", time = "t",
-  methods = c("DID", "MC", "TROP", "DIFP"),
-  horizon = 4, n_pseudo = 8, n_runs = 10, seed = 1
+  methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
+  horizon = 4, n_pseudo = 6, n_runs = 100, seed = 1
 )
 
 r            # ranked table: method, rmse, rmse_se, engine, note
 autoplot(r)  # lower RMSE is better
 ```
+<img src="man/figures/rmse_placebo.png" alt="Placebo RMSE" />
+
 
 For quick diagnosis using large panels, reduce `n_runs` and TROP CV work, for example through
 `trop_control(n_cv_cells = , cv_cycles = )`.
