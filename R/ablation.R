@@ -351,7 +351,6 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
                                   sprintf("[%s, %s]", lo, hi))
     }
   }
-  vcols[["rank(L)"]] <- ifelse(is.na(x$rank), "", as.character(x$rank))
   list(
     labels_expr  = lapply(x$spec, .abl_label_expr),
     labels_plain = vapply(x$spec, .abl_label_plain, character(1)),
@@ -397,14 +396,11 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
   xr <- cumsum(wfrac); xl <- xr - wfrac
 
   title <- "TROP penalty ablation"
-  meta <- sprintf("outcome: %s    anchor: %s",
-                  attr(x, "outcome") %||% "?", attr(x, "anchor") %||% "?")
   meta <- if (has_rmse)
-    sprintf("%s    placebo RMSE over %s runs (TROP = 1.00)",
-            meta, attr(x, "rmse_runs") %||% NA)
+    sprintf("Placebo RMSE over %s runs (TROP = 1.00)",
+            attr(x, "rmse_runs") %||% NA)
   else
-    sprintf("%s    SE: %s", meta, attr(x, "se") %||% "none")
-  substr(meta, 1L, 1L) <- toupper(substr(meta, 1L, 1L))   # capitalised opener
+    sprintf("SE: %s", attr(x, "se") %||% "none")
 
   c_rule <- "#222222"; c_text <- "#111111"; c_sub <- "#555555"; ff <- "serif"
   lay <- .abl_layout(nb)
