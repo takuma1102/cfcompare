@@ -104,10 +104,17 @@ sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
   # selection.
   if (confounding > 0) {
     g_post <- colMeans(Gmat[t0:T, , drop = FALSE])        # post-period factor direction
-    score  <- as.numeric(Fmat %*% g_post)
-    score  <- (score - mean(score)) / stats::sd(score)
-    score  <- score + stats::rnorm(N, sd = 0.3)           # break ties / soften selection
-    treated_units <- sort(order(confounding * score, decreasing = TRUE)[seq_len(n_treated)])
+    load   <- as.numeric(Fmat %*% g_post)
+    load   <- (load - mean(load)) / stats::sd(load)
+    # `confounding` sets the signal-to-noise ratio of selection: larger values
+    # pick treated units more deterministically on their loadings (stronger
+    # selection); as confounding -> 0 the score is dominated by the noise term,
+    # i.e. selection becomes effectively random (ignorable), continuous with the
+    # confounding = 0 branch below. (Note: the multiplier must scale signal
+    # relative to a fixed-variance noise -- scaling the whole score would be a
+    # no-op because order() is invariant to a positive multiplier.)
+    score  <- confounding * load + stats::rnorm(N)
+    treated_units <- sort(order(score, decreasing = TRUE)[seq_len(n_treated)])
   } else {
     treated_units <- seq_len(n_treated)
   }
