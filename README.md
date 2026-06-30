@@ -155,8 +155,8 @@ Inspect the TROP penalty surface by sweeping any two of the three penalties
 ```r
 g <- trop_sensitivity(
   df, "y", "w", "id", "t",
-  axes = c("nn", "time"),
-  control = trop_control(n_cv_cells = 12L, cv_cycles = 1L)
+  axes = c("unit", "time"), # can choose also "nn" for lamda_nn
+  anchor  = "pooled"
 )
 
 autoplot(g)                    # compact ggplot2 heatmap
@@ -168,6 +168,9 @@ surfaces <- plot_trop_surfaces(g, which = "both", ask = FALSE)
 surfaces$cv_loss               # matrix behind the CV-loss surface
 surfaces$att                   # matrix behind the ATT surface
 ```
+
+<img src="man/figures/cv_surface.png" alt="Heatmap for cv" />
+<img src="man/figures/att_surface.png" alt="Heatmap for att" />
 
 Other targeted diagnostics are available when needed:
 
