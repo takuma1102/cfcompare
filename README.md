@@ -166,8 +166,12 @@ Other targeted diagnostics are available when needed:
 ```r
 trop_ablation(df, "y", "w", "id", "t")
 compare_se_modes(df, "y", "w", "id", "t", se = c("bootstrap", "jackknife"))
+```
+
+```r
 trop_event_study(fit, se = "bootstrap")
 ```
+<img src="man/figures/trop_event_study_bootstrap.png" alt="Event Study Plot" />
 
 ## Designs and inference
 
