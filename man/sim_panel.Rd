@@ -14,7 +14,8 @@ sim_panel(
   noise = 0.5,
   seed = NULL,
   n_cov = 0L,
-  phi = NULL
+  phi = NULL,
+  confounding = 0
 )
 }
 \arguments{
@@ -45,6 +46,15 @@ Defaults to \code{length(phi)} when \code{phi} is supplied.}
 \code{n_cov}). When \code{NULL} and \code{n_cov > 0}, coefficients are drawn from a
 standard normal. The coefficients actually used are returned on the
 \code{"phi"} attribute of the result.}
+
+\item{confounding}{Non-negative strength of selection-on-unobservables in the
+treatment assignment. With \code{confounding = 0} (default) the first
+\code{n_treated} units are treated independently of the latent factors, so
+treatment is ignorable and DID/TWFE is unbiased. With \code{confounding > 0}
+treated units are selected on their latent factor loadings (units loading
+heavily on the post-period factor direction are more likely to be treated),
+which biases DID/TWFE while factor-aware (MC, TROP) and weighting (SDID)
+estimators stay consistent. Larger values give stronger selection.}
 }
 \value{
 A long \code{data.frame} with columns \code{id}, \code{t}, \code{y}, \code{w}, and the noiseless

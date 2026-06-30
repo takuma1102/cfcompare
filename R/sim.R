@@ -26,6 +26,14 @@
 #'   `n_cov`). When `NULL` and `n_cov > 0`, coefficients are drawn from a
 #'   standard normal. The coefficients actually used are returned on the
 #'   `"phi"` attribute of the result.
+#' @param confounding Non-negative strength of selection-on-unobservables in the
+#'   treatment assignment. With `confounding = 0` (default) the first
+#'   `n_treated` units are treated independently of the latent factors, so
+#'   treatment is ignorable and DID/TWFE is unbiased. With `confounding > 0`
+#'   treated units are selected on their latent factor loadings (units loading
+#'   heavily on the post-period factor direction are more likely to be treated),
+#'   which biases DID/TWFE while factor-aware (MC, TROP) and weighting (SDID)
+#'   estimators stay consistent. Larger values give stronger selection.
 #' @return A long `data.frame` with columns `id`, `t`, `y`, `w`, and the noiseless
 #'   counterfactual `y0` (useful for evaluating estimators). When `n_cov > 0` it
 #'   additionally carries covariate columns `x1`, ..., `x{n_cov}`, and the true
@@ -41,7 +49,7 @@
 #' @export
 sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
                       rank = 3L, att = 1, noise = 0.5, seed = NULL,
-                      n_cov = 0L, phi = NULL) {
+                      n_cov = 0L, phi = NULL, confounding = 0) {
   if (!is.null(seed)) {
     old <- .Random.seed_safe(); on.exit(.Random.seed_restore(old), add = TRUE)
     set.seed(seed)
@@ -85,8 +93,25 @@ sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
     Y0_obs <- Y0_obs + Xsig
   }
 
+  # Treatment assignment. By default (confounding = 0) the first `n_treated`
+  # units are treated, independent of the latent factors, so treatment is
+  # ignorable and DID/TWFE is unbiased. With confounding > 0 the treated units
+  # are instead selected on their latent factor loadings (paper-style selection
+  # on unobservables): units whose loadings load heavily on the post-period
+  # factor direction are more likely to be treated. This biases DID/TWFE (which
+  # cannot model the interactive term) while factor-aware estimators (MC, TROP)
+  # and weighting estimators (SDID) stay consistent. Larger values = stronger
+  # selection.
+  if (confounding > 0) {
+    g_post <- colMeans(Gmat[t0:T, , drop = FALSE])        # post-period factor direction
+    score  <- as.numeric(Fmat %*% g_post)
+    score  <- (score - mean(score)) / stats::sd(score)
+    score  <- score + stats::rnorm(N, sd = 0.3)           # break ties / soften selection
+    treated_units <- sort(order(confounding * score, decreasing = TRUE)[seq_len(n_treated)])
+  } else {
+    treated_units <- seq_len(n_treated)
+  }
   W <- matrix(0, N, T)
-  treated_units <- seq_len(n_treated)
   W[treated_units, t0:T] <- 1
   Y <- Y0_obs + att * W
 
