@@ -160,6 +160,10 @@ g <- trop_sensitivity(
 )
 
 autoplot(g)                    # compact ggplot2 heatmap
+```
+<img src="man/figures/trop_sensitivity.png" alt="Heatmap" />
+
+```r
 surfaces <- plot_trop_surfaces(g, which = "both", ask = FALSE)
 surfaces$cv_loss               # matrix behind the CV-loss surface
 surfaces$att                   # matrix behind the ATT surface
