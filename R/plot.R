@@ -295,8 +295,7 @@ autoplot.trop_event_study <- function(object, ...) {
     jackknife = "Jackknife SE",
     none      = "no SE",
     sprintf("%s SE", object$se.method))
-  ci_txt <- sprintf("%.0f%% pointwise CI", 100 * object$conf.level)
-  sub_txt <- sprintf("Per-period ATT, %s; %s", ci_txt, se_txt)
+  sub_txt <- se_txt
 
   est$Period <- factor(ifelse(est$period == "pre",
                               "Pre-treatment (placebo)", "Post-treatment"),

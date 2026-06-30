@@ -47,14 +47,17 @@ Defaults to \code{length(phi)} when \code{phi} is supplied.}
 standard normal. The coefficients actually used are returned on the
 \code{"phi"} attribute of the result.}
 
-\item{confounding}{Non-negative strength of selection-on-unobservables in the
+\item{confounding}{Non-negative strength of selection-on-confounders in the
 treatment assignment. With \code{confounding = 0} (default) the first
-\code{n_treated} units are treated independently of the latent factors, so
-treatment is ignorable and DID/TWFE is unbiased. With \code{confounding > 0}
-treated units are selected on their latent factor loadings (units loading
-heavily on the post-period factor direction are more likely to be treated),
-which biases DID/TWFE while factor-aware (MC, TROP) and weighting (SDID)
-estimators stay consistent. Larger values give stronger selection.}
+\code{n_treated} units are treated independently of the latent factors and
+covariates, so treatment is ignorable and DID/TWFE is unbiased. With
+\code{confounding > 0} treated units are selected on their latent factor
+loadings and, when covariates are present (\code{n_cov > 0}), on their
+post-period covariate index \eqn{X'\phi} as well. The factor part biases
+estimators without a low-rank term (DID, SDID, SC); the covariate part
+biases estimators that ignore covariates (SDID, SC, uncontrolled DID). A
+fully robust estimator (e.g. TROP with \verb{covariates=}) removes both. Larger
+values give stronger selection.}
 }
 \value{
 A long \code{data.frame} with columns \code{id}, \code{t}, \code{y}, \code{w}, and the noiseless

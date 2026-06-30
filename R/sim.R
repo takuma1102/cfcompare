@@ -26,14 +26,17 @@
 #'   `n_cov`). When `NULL` and `n_cov > 0`, coefficients are drawn from a
 #'   standard normal. The coefficients actually used are returned on the
 #'   `"phi"` attribute of the result.
-#' @param confounding Non-negative strength of selection-on-unobservables in the
+#' @param confounding Non-negative strength of selection-on-confounders in the
 #'   treatment assignment. With `confounding = 0` (default) the first
-#'   `n_treated` units are treated independently of the latent factors, so
-#'   treatment is ignorable and DID/TWFE is unbiased. With `confounding > 0`
-#'   treated units are selected on their latent factor loadings (units loading
-#'   heavily on the post-period factor direction are more likely to be treated),
-#'   which biases DID/TWFE while factor-aware (MC, TROP) and weighting (SDID)
-#'   estimators stay consistent. Larger values give stronger selection.
+#'   `n_treated` units are treated independently of the latent factors and
+#'   covariates, so treatment is ignorable and DID/TWFE is unbiased. With
+#'   `confounding > 0` treated units are selected on their latent factor
+#'   loadings and, when covariates are present (`n_cov > 0`), on their
+#'   post-period covariate index \eqn{X'\phi} as well. The factor part biases
+#'   estimators without a low-rank term (DID, SDID, SC); the covariate part
+#'   biases estimators that ignore covariates (SDID, SC, uncontrolled DID). A
+#'   fully robust estimator (e.g. TROP with `covariates=`) removes both. Larger
+#'   values give stronger selection.
 #' @return A long `data.frame` with columns `id`, `t`, `y`, `w`, and the noiseless
 #'   counterfactual `y0` (useful for evaluating estimators). When `n_cov > 0` it
 #'   additionally carries covariate columns `x1`, ..., `x{n_cov}`, and the true
@@ -94,26 +97,31 @@ sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
   }
 
   # Treatment assignment. By default (confounding = 0) the first `n_treated`
-  # units are treated, independent of the latent factors, so treatment is
-  # ignorable and DID/TWFE is unbiased. With confounding > 0 the treated units
-  # are instead selected on their latent factor loadings (paper-style selection
-  # on unobservables): units whose loadings load heavily on the post-period
-  # factor direction are more likely to be treated. This biases DID/TWFE (which
-  # cannot model the interactive term) while factor-aware estimators (MC, TROP)
-  # and weighting estimators (SDID) stay consistent. Larger values = stronger
-  # selection.
+  # units are treated, independent of the latent factors and covariates, so
+  # treatment is ignorable and DID/TWFE is unbiased. With confounding > 0 the
+  # treated units are selected on (a) their latent factor loadings and (b), when
+  # covariates are present, their post-period covariate index X.phi. The factor
+  # part (unobserved) biases estimators without a low-rank term (DID, SDID, SC);
+  # the covariate part (observed) biases estimators that ignore covariates
+  # (SDID, SC, uncontrolled DID). A fully robust estimator -- TROP (or MC/DID)
+  # with `covariates=` -- removes both. Larger values = stronger selection.
   if (confounding > 0) {
     g_post <- colMeans(Gmat[t0:T, , drop = FALSE])        # post-period factor direction
     load   <- as.numeric(Fmat %*% g_post)
     load   <- (load - mean(load)) / stats::sd(load)
+    # Observed-covariate confounding: high post-period X.phi -> more likely
+    # treated. Zero when there are no covariates (factor-only, as before).
+    cov_load <- if (n_cov > 0L) {
+      x_idx <- rowMeans(Xsig[, t0:T, drop = FALSE])
+      (x_idx - mean(x_idx)) / stats::sd(x_idx)
+    } else 0
     # `confounding` sets the signal-to-noise ratio of selection: larger values
-    # pick treated units more deterministically on their loadings (stronger
-    # selection); as confounding -> 0 the score is dominated by the noise term,
-    # i.e. selection becomes effectively random (ignorable), continuous with the
-    # confounding = 0 branch below. (Note: the multiplier must scale signal
-    # relative to a fixed-variance noise -- scaling the whole score would be a
-    # no-op because order() is invariant to a positive multiplier.)
-    score  <- confounding * load + stats::rnorm(N)
+    # pick treated units more deterministically on their loadings / covariate
+    # index (stronger selection); as confounding -> 0 the noise term dominates
+    # and selection becomes effectively random (ignorable), continuous with the
+    # confounding = 0 branch below. (The multiplier must scale signal against a
+    # fixed-variance noise: order() is invariant to a positive multiplier.)
+    score  <- confounding * (load + cov_load) + stats::rnorm(N)
     treated_units <- sort(order(score, decreasing = TRUE)[seq_len(n_treated)])
   } else {
     treated_units <- seq_len(n_treated)

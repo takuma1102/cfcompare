@@ -10,6 +10,7 @@ panel_compare(
   treatment,
   unit,
   time,
+  covariates = NULL,
   methods = c("TROP", "DID", "SC", "MC", "SDID", "DIFP"),
   exclude = NULL,
   anchor = "auto",
@@ -24,6 +25,13 @@ panel_compare(
 \item{outcome, treatment, unit, time}{Column names (strings). \code{treatment} must be
 a 0/1 indicator of \emph{active} treatment in that cell (works for block,
 staggered, and non-absorbing designs).}
+
+\item{covariates}{Optional character vector of time-varying covariate column
+names. Passed to the native engines (\code{"DID"}, \code{"MC"}, \code{"TROP"}), which share
+the additive covariate model \eqn{L_{js} = X_{js}'\phi + R_{js}}; the
+synthdid-based methods (\code{"SDID"}, \code{"SC"}), \code{"DIFP"} and the optional engines
+(\code{"gsynth"}, \code{"augsynth"}, \code{"CS"}) do not receive covariates here and are run
+without them. Covariates must be fully observed across all unit-time cells.}
 
 \item{methods}{Character vector of methods to run. Any of \code{"DID"}, \code{"SDID"},
 \code{"SC"}, \code{"MC"}, \code{"DIFP"}, \code{"TROP"}, \code{"gsynth"}, \code{"augsynth"}, \code{"CS"}.

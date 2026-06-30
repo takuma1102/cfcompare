@@ -27,37 +27,37 @@
 #' Native DID / TWFE engine: lambda_nn = Inf, uniform weights.
 #' @keywords internal
 #' @noRd
-.engine_did <- function(Y, W, pat, control, se, conf_level) {
+.engine_did <- function(Y, W, pat, control, se, conf_level, X = NULL) {
   .trop_engine(Y, W, pat,
                lambda = list(time = 0, unit = 0, nn = Inf),
                grids = NULL, control = control,
-               anchor = "pooled", se = se, conf_level = conf_level)
+               anchor = "pooled", se = se, conf_level = conf_level, X = X)
 }
 
 #' Native matrix-completion engine: uniform weights, CV over lambda_nn only.
 #' @keywords internal
 #' @noRd
-.engine_mc <- function(Y, W, pat, control, se, conf_level, verbose = FALSE) {
-  grids <- .trop_default_grids(Y, W)
+.engine_mc <- function(Y, W, pat, control, se, conf_level, verbose = FALSE, X = NULL) {
+  grids <- .trop_default_grids(Y, W, X = X)
   grids$time <- 0
   grids$unit <- 0
   .trop_engine(Y, W, pat, lambda = NULL, grids = grids, control = control,
                anchor = "pooled", se = se, conf_level = conf_level,
-               verbose = verbose)
+               verbose = verbose, X = X)
 }
 
 #' Native TROP engine (full).
 #' @keywords internal
 #' @noRd
 .engine_trop <- function(Y, W, pat, control, anchor, se, conf_level,
-                         verbose = FALSE) {
+                         verbose = FALSE, X = NULL) {
   if (anchor == "auto") {
     anchor <- if (pat$n_treated_cells <= control$max_cells) "per_cell" else "pooled"
   }
-  grids <- .trop_default_grids(Y, W)
+  grids <- .trop_default_grids(Y, W, X = X)
   .trop_engine(Y, W, pat, lambda = NULL, grids = grids, control = control,
                anchor = anchor, se = se, conf_level = conf_level,
-               verbose = verbose)
+               verbose = verbose, X = X)
 }
 
 #' synthdid engine (SDID or SC), block designs only.

@@ -12,6 +12,12 @@
 #' or that do not apply to the design, are skipped with a message.
 #'
 #' @inheritParams trop
+#' @param covariates Optional character vector of time-varying covariate column
+#'   names. Passed to the native engines (`"DID"`, `"MC"`, `"TROP"`), which share
+#'   the additive covariate model \eqn{L_{js} = X_{js}'\phi + R_{js}}; the
+#'   synthdid-based methods (`"SDID"`, `"SC"`), `"DIFP"` and the optional engines
+#'   (`"gsynth"`, `"augsynth"`, `"CS"`) do not receive covariates here and are run
+#'   without them. Covariates must be fully observed across all unit-time cells.
 #' @param methods Character vector of methods to run. Any of `"DID"`, `"SDID"`,
 #'   `"SC"`, `"MC"`, `"DIFP"`, `"TROP"`, `"gsynth"`, `"augsynth"`, `"CS"`.
 #'   Defaults to the native engines plus SDID and SC: `c("TROP", "DID", "SC",
@@ -33,6 +39,7 @@
 #' cmp$att
 #' @export
 panel_compare <- function(data, outcome, treatment, unit, time,
+                          covariates = NULL,
                           methods = c("TROP", "DID", "SC", "MC", "SDID", "DIFP"),
                           exclude = NULL,
                           anchor = "auto",
@@ -48,6 +55,18 @@ panel_compare <- function(data, outcome, treatment, unit, time,
   pat <- .assignment_pattern(W)
   cl <- control$conf_level
 
+  # Covariates are supported only by the native engines (DID, MC, TROP), which
+  # share .trop_engine()'s additive covariate model L = X.phi + R. synthdid-based
+  # methods (SDID, SC), DIFP and the optional engines (gsynth, augsynth, CS) do
+  # not receive covariates here and are run without them.
+  X <- .covariate_matrices(data, covariates, unit, time, m$units, m$times)
+  if (!is.null(X)) {
+    nonnative <- intersect(methods, c("SDID", "SC", "DIFP", "gsynth", "augsynth", "CS"))
+    if (length(nonnative))
+      message("Note: covariates are used only by DID/MC/TROP; run without them for: ",
+              paste(nonnative, collapse = ", "), ".")
+  }
+
   rows <- list()
   cfs <- list()
   fits <- list()
@@ -61,9 +80,9 @@ panel_compare <- function(data, outcome, treatment, unit, time,
   for (meth in methods) {
     if (verbose) message("Running ", meth, " ...")
     if (meth == "DID") {
-      add_native("DID", "cfcompare", .engine_did(Y, W, pat, control, se, cl))
+      add_native("DID", "cfcompare", .engine_did(Y, W, pat, control, se, cl, X = X))
     } else if (meth == "MC") {
-      add_native("MC", "cfcompare", .engine_mc(Y, W, pat, control, se, cl, verbose))
+      add_native("MC", "cfcompare", .engine_mc(Y, W, pat, control, se, cl, verbose, X = X))
     } else if (meth == "DIFP") {
       eng <- .engine_difp(Y, W, pat, control, cl, se)
       if (inherits(eng, "skip")) {
@@ -75,7 +94,7 @@ panel_compare <- function(data, outcome, treatment, unit, time,
       }
     } else if (meth == "TROP") {
       add_native("TROP", "cfcompare",
-                 .engine_trop(Y, W, pat, control, anchor, se, cl, verbose))
+                 .engine_trop(Y, W, pat, control, anchor, se, cl, verbose, X = X))
     } else if (meth %in% c("SDID", "SC")) {
       eng <- .engine_synthdid(Y, W, pat,
                               which = if (meth == "SDID") "sdid" else "sc", cl,
