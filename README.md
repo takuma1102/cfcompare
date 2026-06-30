@@ -123,6 +123,7 @@ autoplot(r)  # lower RMSE is better
 <img src="man/figures/rmse_placebo.png" alt="Placebo RMSE" />
 
  `metric = "prediction"` scores per-cell counterfactual prediction error through `counterfactual_matrix()`.
+ 
 <img src="man/figures/rmse_prediction.png" alt="Prediction RMSE" />
 
 For quick diagnosis using large panels, reduce `n_runs` and TROP CV work, for example through
