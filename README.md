@@ -59,7 +59,10 @@ cmp <- panel_compare(
   df,
   outcome = "y", treatment = "w", unit = "id", time = "t",
   methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
-  se = "bootstrap"  # You can also choose jackknife or "none" for running this faster.
+  se = "bootstrap",  # You can also choose jackknife or "none" for running this faster.
+  anchor  = "pooled",  # faster method
+  # or "per-cell" (more accurate; in accordance with the original paper)
+  # or "auto" (choosing "per-cell" or "pooled" depending on the number of treated cells) 
 )
 
 cmp$att                    # tidy ATT table, one row per method
@@ -154,7 +157,7 @@ Inspect the TROP penalty surface by sweeping any two of the three penalties
 g <- trop_sensitivity(
   df, "y", "w", "id", "t",
   axes = c("unit", "time"), # You can also choose "nn" for lamda_nn
-  anchor  = "pooled"
+  anchor  = "pooled"  # 
 )
 
 autoplot(g)                    # compact ggplot2 heatmap (see below)
@@ -229,7 +232,7 @@ package on exactly comparable weighted-TWFE sample datasets, using
 > soft-impute routine, as opposed to FISTA or SCS, so that the implementation depends only on base R. Thus, exact digits need not perfectly match convex-solver implementations
 > outside the comparable special cases.
 > Third, penalties are chosen by leave-one-control-cell-out prediction error, as opposed to being tuned by placebo-RMSE.
-> Fourth, this package supports both anchoring modes of per-cell (solving a separate local weighting problem for each treated cell) and pooled method (constructing one set of weights anchored on the treated group/periods; faster than per-cell).
+> Fourth, this package supports both anchoring modes of per-cell (solving a separate local weighting problem for each treated cell) and pooled methods (constructing one set of weights anchored on the entire treated group/periods; faster than per-cell).
 > Lastly, estimation uses the raw outcome (no standardization), so that `lambda` values are on the outcome's natural scale.
 > To reconcile these differences exactly with another official implementation, fix the penalties via
 > `lambda = list(time=, unit=, nn=)` (bypassing CV), set `svd = "full"`, and match
