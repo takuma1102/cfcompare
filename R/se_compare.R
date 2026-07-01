@@ -62,6 +62,12 @@ compare_se_modes <- function(data, outcome, treatment, unit, time,
   lam0 <- fit0$lambda
   lam <- list(time = lam0$time, unit = lam0$unit, nn = lam0$nn)
 
+  # Bootstrap replication count, captured from the bootstrap fit (the achieved
+  # number of finite resamples, exactly as autoplot.trop() reports) so the plot
+  # can name it in its subtitle. NULL when no bootstrap SE was requested or the
+  # bootstrap was degenerate.
+  n_boot <- NULL
+
   one <- function(s, lb) {
     f <- tryCatch(
       trop(data, outcome, treatment, unit, time,
@@ -76,6 +82,7 @@ compare_se_modes <- function(data, outcome, treatment, unit, time,
       row$note <- paste0("SE '", s, "' failed: ", conditionMessage(f))
       row
     } else {
+      if (identical(s, "bootstrap")) n_boot <<- f$n_boot
       as_att(f, method = lb)
     }
   }
@@ -83,6 +90,7 @@ compare_se_modes <- function(data, outcome, treatment, unit, time,
   out <- .rbind_att(Map(one, se, labs))
   attr(out, "outcome") <- outcome
   attr(out, "anchor")  <- anchor
+  attr(out, "n_boot")  <- n_boot
   class(out) <- c("cf_se_comparison", "cf_att_tbl", "data.frame")
   out
 }
@@ -114,13 +122,23 @@ autoplot.cf_se_comparison <- function(object, ...) {
       ggplot2::aes(xmin = .data$conf.low, xmax = .data$conf.high),
       height = 0.16, na.rm = TRUE)
   }
+  # Subtitle reports the bootstrap replication count, mirroring the "<n> reps"
+  # style of the package's other autoplots (autoplot.cf_rmse_curve()'s Monte
+  # Carlo reps per point, autoplot.trop()'s "Bootstrap SE (<n> reps)"). When no
+  # bootstrap SE was requested it falls back to noting the shared point estimate.
+  n_boot <- attr(object, "n_boot")
+  sub_txt <- if (!is.null(n_boot))
+    sprintf("%d bootstrap reps", n_boot)
+  else
+    "Point estimate fixed by cross-validation"
+
   p +
     ggplot2::geom_point(size = 2.8) +
     ggplot2::expand_limits(x = 0) +
     ggplot2::labs(
       x = "ATT estimate", y = NULL,
       title = "Comparison across SE methods",
-      subtitle = "Point estimate fixed by cross-validation") +
+      subtitle = sub_txt) +
     ggplot2::theme_minimal(base_size = 12) +
     .center_titles()
 }
