@@ -302,7 +302,8 @@
 #'   re-solves eq. (2) with cell-specific weights for every treated cell
 #'   (faithful to the paper); `"pooled"` solves once with weights anchored to the
 #'   treated set (fast); `"auto"` (default) uses `per_cell` when there are at
-#'   most `max_cells` treated cells and `pooled` otherwise.
+#'   most `max_cells` treated cells and `pooled` otherwise. `trop_matrix()` has 
+#'   no `anchor` argument; it is always pooled/block-center.
 #' @param se Standard-error method: `"bootstrap"` (default; unit-level
 #'   stratified block bootstrap), `"jackknife"` (leave-one-treated-unit-out;
 #'   needs at least 2 treated units), `"auto"` (jackknife when there are at least
@@ -573,8 +574,12 @@ trop <- function(data, outcome, treatment, unit, time,
 
 #' Control settings for [trop()]
 #'
-#' @param max_iter Maximum solver iterations.
-#' @param tol Solver convergence tolerance.
+#' @param max_iter Maximum solver iterations. Higher by default because small
+#'   `lambda_nn` converges slowly under the soft-impute iteration.
+#' @param tol Reference solver convergence tolerance. The applied tolerance is
+#'   tightened automatically as `lambda_nn` weakens (small penalties converge
+#'   slowly), keeping accuracy roughly constant across the penalty grid; a fixed
+#'   tolerance otherwise under-converges at small `lambda_nn`. See [trop()].
 #' @param n_cv_cells Number of control cells sampled for the CV criterion.
 #' @param cv_cycles Number of coordinate-descent cycles in penalty selection.
 #' @param cv_method Penalty cross-validation criterion. `"loocv"` (default)
@@ -607,7 +612,7 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @param seed Optional seed for CV cell sampling (reproducibility).
 #' @return A list of control parameters.
 #' @export
-trop_control <- function(max_iter = 200L, tol = 1e-5,
+trop_control <- function(max_iter = 2000L, tol = 1e-6,
                          n_cv_cells = 120L, cv_cycles = 2L,
                          max_cells = 60L, conf_level = 0.95,
                          n_boot = 200L, boot_ci = c("percentile", "normal"),

@@ -5,8 +5,8 @@
 \title{Control settings for \code{\link[=trop]{trop()}}}
 \usage{
 trop_control(
-  max_iter = 200L,
-  tol = 1e-05,
+  max_iter = 2000L,
+  tol = 1e-06,
   n_cv_cells = 120L,
   cv_cycles = 2L,
   max_cells = 60L,
@@ -21,9 +21,13 @@ trop_control(
 )
 }
 \arguments{
-\item{max_iter}{Maximum solver iterations.}
+\item{max_iter}{Maximum solver iterations. Higher by default because small
+\code{lambda_nn} converges slowly under the soft-impute iteration.}
 
-\item{tol}{Solver convergence tolerance.}
+\item{tol}{Reference solver convergence tolerance. The applied tolerance is
+tightened automatically as \code{lambda_nn} weakens (small penalties converge
+slowly), keeping accuracy roughly constant across the penalty grid; a fixed
+tolerance otherwise under-converges at small \code{lambda_nn}. See \code{\link[=trop]{trop()}}.}
 
 \item{n_cv_cells}{Number of control cells sampled for the CV criterion.}
 

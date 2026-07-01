@@ -57,6 +57,14 @@ proximal-gradient / soft-impute routine, which targets the same convex program
 as eq. (2) (loss \verb{sum_js w (Y - alpha - beta - L)^2}, with no 1/2 factor);
 \code{lambda_nn} is therefore on the same scale as the official Python and Stata
 packages, and finite-penalty results agree with them to solver tolerance.
+
+\code{trop_matrix()} always uses the pooled weighting scheme anchored to the centre
+of the treated block: it takes no \code{anchor} argument and has no per-cell mode.
+It therefore computes the same pooled, block-centre estimator as the official
+Python package's \code{TROP_TWFE_average} (implemented independently), and exists as
+a like-for-like matrix-in cross-check against that pooled reference. For the
+per-cell estimator (the paper's eq. (12) / Algorithm 2), use
+\code{trop(..., anchor = "per_cell")}, which shares the data-frame core \code{.trop_att()}.
 }
 \examples{
 df <- sim_panel(N = 15, T = 12, n_treated = 3, t0 = 9, att = 2, seed = 1)

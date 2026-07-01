@@ -139,8 +139,15 @@
 #' @param mask N x T 0/1 matrix; 1 = cell is used in the loss.
 #' @param w N x T non-negative observation weights (only used where `mask == 1`).
 #' @param lambda Nuclear-norm penalty (use `Inf` for no low-rank term).
-#' @param max_iter Maximum number of outer iterations.
-#' @param tol Relative Frobenius convergence tolerance on the fitted matrix.
+#' @param max_iter Maximum number of outer iterations. Higher by default because
+#'   small `lambda` converges slowly under the proximal-gradient iteration.
+#' @param tol Reference relative-Frobenius convergence tolerance. Because the
+#'   soft-impute iteration converges slowly for small `lambda` (weak shrinkage),
+#'   the tolerance actually applied is tightened as the regularisation weakens:
+#'   `tol * min(1, max(lambda / (2 * max(w) * s1), 1e-3))`, where `s1` is the
+#'   operator norm of the two-way-demeaned outcome. This keeps the achieved
+#'   accuracy roughly constant across `lambda`; a fixed `tol` otherwise stops
+#'   prematurely at small `lambda`. `lambda = Inf` leaves `tol` unchanged.
 #' @param L_init Optional warm start for the low-rank part (the residual `R` when
 #'   covariates are present), e.g. from a previous solve on a similar problem;
 #'   speeds up convergence without changing the solution.
@@ -156,7 +163,7 @@
 #' @keywords internal
 #' @noRd
 .mcnnm_fit <- function(Y, mask, w, lambda,
-                       max_iter = 200L, tol = 1e-5, L_init = NULL,
+                       max_iter = 2000L, tol = 1e-6, L_init = NULL,
                        svd_method = c("truncated", "full"), X = NULL) {
   svd_method <- match.arg(svd_method)
   N <- nrow(Y); Tt <- ncol(Y)
@@ -178,6 +185,17 @@
   # 1/2-loss variant and make lambda_nn half of the paper's / Python's / Stata's
   # scale.
   thr <- lambda / (2 * Lip)
+  # nn-adaptive convergence tolerance. The soft-impute iteration converges
+  # slowly when lambda is small (weak shrinkage), so a fixed relative tolerance
+  # stops prematurely there. Scale tol by the dimensionless shrinkage strength
+  # rho = thr / s1 in (0, 1] -- rho >= 1 means the low-rank term is fully shrunk
+  # and the fit converges in a couple of steps -- where s1 is the operator norm
+  # of the two-way-demeaned outcome. This holds the achieved accuracy roughly
+  # constant across lambda. rho is floored at 1e-3 so tol_eff stays >= tol / 1000
+  # (bounded, together with max_iter, for very small lambda).
+  s1 <- tryCatch(max(svd(.double_demean(Yf))$d), error = function(e) NA_real_)
+  rho <- if (is.finite(s1) && s1 > 0) thr / s1 else 1
+  tol_eff <- tol * min(1, max(rho, 1e-3))
   rnk <- 0L
   it <- 0L
 
@@ -221,7 +239,7 @@
     rnk <- sv$rank
     M <- structured + L
     denom <- sqrt(sum(M_old^2)) + 1e-12
-    if (sqrt(sum((M - M_old)^2)) / denom < tol) break
+    if (sqrt(sum((M - M_old)^2)) / denom < tol_eff) break
   }
   list(M = M, L = L, alpha = a, beta = b, grand = g,
        phi = phi, rank = rnk, iter = it, lambda = lambda)

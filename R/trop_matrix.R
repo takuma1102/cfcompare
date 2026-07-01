@@ -44,7 +44,15 @@
 #' as eq. (2) (loss `sum_js w (Y - alpha - beta - L)^2`, with no 1/2 factor);
 #' `lambda_nn` is therefore on the same scale as the official Python and Stata
 #' packages, and finite-penalty results agree with them to solver tolerance.
-#'
+#' 
+#' `trop_matrix()` always uses the pooled weighting scheme anchored to the centre
+#' of the treated block: it takes no `anchor` argument and has no per-cell mode.
+#' It therefore computes the same pooled, block-centre estimator as the official
+#' Python package's `TROP_TWFE_average` (implemented independently), and exists as
+#' a like-for-like matrix-in cross-check against that pooled reference. For the
+#' per-cell estimator (the paper's eq. (12) / Algorithm 2), use
+#' `trop(..., anchor = "per_cell")`, which shares the data-frame core `.trop_att()`.
+#' 
 #' @param Y N x T outcome matrix.
 #' @param W N x T 0/1 treatment matrix (1 = actively treated cell).
 #' @param treated_units Integer row indices of the treated units, used to anchor

@@ -42,7 +42,8 @@ penalties and skip cross-validation.}
 re-solves eq. (2) with cell-specific weights for every treated cell
 (faithful to the paper); \code{"pooled"} solves once with weights anchored to the
 treated set (fast); \code{"auto"} (default) uses \code{per_cell} when there are at
-most \code{max_cells} treated cells and \code{pooled} otherwise.}
+most \code{max_cells} treated cells and \code{pooled} otherwise. \code{trop_matrix()} has
+no \code{anchor} argument; it is always pooled/block-center.}
 
 \item{se}{Standard-error method: \code{"bootstrap"} (default; unit-level
 stratified block bootstrap), \code{"jackknife"} (leave-one-treated-unit-out;
