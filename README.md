@@ -126,13 +126,12 @@ autoplot(r)  # see below for an example plot
  
 <img src="man/figures/rmse_prediction.png" alt="Prediction RMSE" />
 
-For quick diagnostics on large panels, use lighter TROP controls via `trop_control(n_cv_cells = , cv_cycles = , max_iter = )`.
+For quick diagnostics on large panels, reduce the outer repetition counts, such as `n_runs`, and use lighter TROP controls via `trop_control(n_cv_cells = , cv_cycles = , max_iter = )`.
 
 > **Note**: This is a **predictive** error on held-out cells, not estimation error against a
-> known effect. It is a different quantity from the *estimation* RMSE `sqrt(E[(tau_hat - tau)^2])` reported by `rmse_curve()` / `rmse_curves()` over
-> Monte Carlo replications with a known true ATT. In short: `panel_rmse()` asks
-> "how well does each method predict outcomes it never saw?", while `rmse_curve()`
-> asks "how close is each method's ATT to the truth as the design changes?" — and the two can rank methods differently.
+> known effect. It is a different quantity from the *estimation* RMSE `sqrt(E[(tau_hat - tau)^2])` reported
+> by `rmse_curves()` and `rmse_curve()` (for a single-dimension plot) over
+> Monte Carlo replications with a known true ATT. These two can rank methods differently.
 
 ## TROP diagnostics
 
@@ -144,7 +143,7 @@ fit <- trop(df, "y", "w", "id", "t")
 fit$lambda                  # CV-selected (time, unit, nn) penalties
 fit$tau_cells               # per-treated-cell effects
 counterfactual_matrix(fit)  # fitted N x T untreated-outcome matrix
-autoplot(fit)               # synthetic-control-style trajectory
+autoplot(fit)               # synthetic-control-style trajectory; see below
 ```
 <img src="man/figures/trop_trajectory.png" alt="SC-style trajectory" />
 
@@ -154,16 +153,16 @@ Inspect the TROP penalty surface by sweeping any two of the three penalties
 ```r
 g <- trop_sensitivity(
   df, "y", "w", "id", "t",
-  axes = c("unit", "time"), # can choose also "nn" for lamda_nn
+  axes = c("unit", "time"), # You can also choose "nn" for lamda_nn
   anchor  = "pooled"
 )
 
-autoplot(g)                    # compact ggplot2 heatmap
+autoplot(g)                    # compact ggplot2 heatmap (see below)
 ```
 <img src="man/figures/trop_sensitivity.png" alt="Heatmap" />
 
 ```r
-surfaces <- plot_trop_surfaces(g, which = "both", ask = FALSE)
+surfaces <- plot_trop_surfaces(g, which = "both", ask = FALSE) (see below)
 surfaces$cv_loss               # matrix behind the CV-loss surface
 surfaces$att                   # matrix behind the ATT surface
 ```
@@ -174,7 +173,7 @@ surfaces$att                   # matrix behind the ATT surface
 Other targeted diagnostics are available when needed:
 
 ```r
-trop_ablation(df, "y", "w", "id", "t")
+trop_ablation(df, "y", "w", "id", "t")  # see below
 compare_se_modes(df, "y", "w", "id", "t", se = c("bootstrap", "jackknife"))
 ```
 
