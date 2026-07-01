@@ -10,3 +10,4 @@
 ^.*\.patch$
 ^.*\.diff$
 ^\.lintr$
+^data-raw$

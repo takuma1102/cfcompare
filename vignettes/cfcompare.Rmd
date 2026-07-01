@@ -1,6 +1,8 @@
 ---
 title: "Comparing panel estimators with cfcompare"
-output: rmarkdown::html_vignette
+output:
+  rmarkdown::html_vignette:
+    self_contained: true
 vignette: >
   %\VignetteIndexEntry{Comparing panel estimators with cfcompare}
   %\VignetteEngine{knitr::rmarkdown}
@@ -11,16 +13,21 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  # The estimator chunks below run a full TROP cross-validation + jackknife.
-  # During R CMD build/check the vignette is knitted from scratch (twice:
-  # once at build, once when check re-builds vignette outputs), so leaving
-  # these live makes every check dominated by the vignette. We therefore run
-  # them ONLY when explicitly opted in. To render with live output locally:
-  #   Sys.setenv(CFCOMPARE_BUILD_VIGNETTE = "true")
-  #   devtools::build_vignettes()   # or pkgdown::build_site()
-  eval = nzchar(Sys.getenv("CFCOMPARE_BUILD_VIGNETTE")) &&
-    requireNamespace("ggplot2", quietly = TRUE)
+  # This vignette uses PRECOMPUTED figures kept in man/figures/ -- the very same
+  # images shown in the README and in the help pages. The estimator code below is
+  # shown for reference but is NOT run at build time, which keeps R CMD build,
+  # R CMD check and pkgdown fast (a full cross-validation + bootstrap per figure
+  # would otherwise dominate every check). Copy any snippet into an R session to
+  # run it live. Figures render because the output is self-contained: each
+  # man/figures/*.png is embedded (base64) into the built HTML, so the vignette
+  # still shows them after the package is installed.
+  eval = FALSE,
+  echo = TRUE
 )
+# Chunks that display a shared figure opt in with `opts.label = "fig"`.
+knitr::opts_template$set(fig = list(
+  eval = TRUE, echo = FALSE, out.width = "100%", fig.align = "center"
+))
 ```
 
 ## The problem
@@ -28,13 +35,13 @@ knitr::opts_chunk$set(
 You have a binary-treatment panel and several plausible estimators: classic
 difference-in-differences (DID), synthetic difference-in-differences (SDID),
 synthetic control (SC), matrix completion (MC), and the Triply RObust Panel
-(TROP) estimator of Athey, Imbens, Qu & Viviano (2025). Each lives in its own
+(TROP) estimator of Athey, Imbens, Qu & Viviano (2026). Each lives in its own
 package with its own data format, its own notion of a "treatment effect" and its
 own plot. Comparing them on the *same* dataset means re-shaping data five times
 and reconciling five different output objects by hand.
 
-`cfcompare` does that reconciliation for you. You pass one long-format data frame and
-a vector of method names; you get back one tidy table of ATTs and one plot.
+`cfcompare` does that reconciliation for you. You pass one long-format data frame
+and a vector of method names; you get back one tidy table of ATTs and one plot.
 
 ```{r setup}
 library(cfcompare)
@@ -69,45 +76,42 @@ cmp <- panel_compare(
 cmp
 ```
 
-The `att` element is a `cf_att_tbl`: one row per method, all on the same
-schema.
-
-```{r att-table}
-cmp$att
-```
-
-Here `methods` was given explicitly. If you omit it, `panel_compare()` runs its
-default set --- `TROP`, `DID`, `SC`, `MC`, `SDID`, and `DIFP` (the native engines
-plus synthetic DID and synthetic control). To run the defaults without a particular method, pass `exclude`
-rather than retyping the list, e.g. `panel_compare(..., exclude = "DIFP")`. The
-same `methods` / `exclude` arguments work in `panel_rmse()` and `rmse_curve()`.
+The `att` element is a `cf_att_tbl`: one row per method, all on the same schema
+(`cmp$att`). If you omit `methods`, `panel_compare()` runs its default set ---
+`TROP`, `DID`, `SC`, `MC`, `SDID`, and `DIFP` (the native engines plus synthetic
+DID and synthetic control). To run the defaults *without* a particular method,
+pass `exclude` rather than retyping the list, e.g.
+`panel_compare(..., exclude = "DIFP")`. The same `methods` / `exclude` arguments
+work in `panel_rmse()` and `rmse_curve()`.
 
 Every estimate carries the number of treated cells and units, the estimated rank
 of the low-rank component `L` (for the native engines), and a `note` column that
 records anything that was skipped.
 
-## Plots
-
 `autoplot()` on the comparison gives a forest plot of the ATTs with their
 confidence intervals:
 
-```{r forest, fig.width = 6, fig.height = 3}
+```{r forest-code, eval = FALSE}
 autoplot(cmp)
+```
+
+```{r forest-fig, opts.label = "fig"}
+knitr::include_graphics("../man/figures/compare_forest.png")
 ```
 
 `plot_counterfactual()` overlays the observed treated-average path against each
 estimator's predicted untreated path, so you can see *where* the methods
 disagree, not just by how much:
 
-```{r cf, fig.width = 6, fig.height = 3.5}
+```{r cf, eval = FALSE}
 plot_counterfactual(cmp)
 ```
 
 ## One estimator at a time
 
 `trop()` is the workhorse. Called on its own it cross-validates the three
-penalties — time-weight decay, unit-weight decay, and the nuclear-norm penalty
-on `L` — by leave-one-out on the control cells.
+penalties --- time-weight decay, unit-weight decay, and the nuclear-norm penalty
+on `L` --- by leaving out control cells one at a time and scoring the prediction.
 
 ```{r trop-fit}
 fit <- trop(df, "y", "w", "id", "t", se = "jackknife",
@@ -129,28 +133,30 @@ line marking the first treated period (the post-treatment gap between the two
 lines is the effect, left unshaded so it is not mistaken for a confidence band).
 Because TROP carries explicit time weights, those weights are drawn as a filled
 band along the bottom, in the style of `synthdid`'s time-weight strip. The band
-shows *time weights* — how much each period the counterfactual leans on — not
+shows *time weights* --- how much each period the counterfactual leans on --- not
 observation counts; it is flat when `lambda_time = 0` (uniform weighting). Use
 `show_weights = FALSE` to drop the band.
 
-This trajectory shows only point estimates — no standard errors or confidence
-intervals — so by default the subtitle reports just the selected penalties (set
-`show_se = TRUE` to also note the SE method). To *see* the fit's uncertainty, use
-`trop_event_study()` and `autoplot()` on it, which draws per-period estimates with
-pointwise confidence bars (next section). The `se=` argument on `trop()` still
-controls the standard error shown in `print()`, `as_att()`, and the comparison
-forest plot.
+This trajectory shows only point estimates --- no standard errors --- so by
+default the subtitle reports just the selected penalties (set `show_se = TRUE` to
+also note the SE method). To *see* the fit's uncertainty, use `trop_event_study()`
+(next section). The `se =` argument on `trop()` still controls the standard error
+shown in `print()`, `as_att()`, and the comparison forest plot.
 
-```{r trop-autoplot, fig.width = 6, fig.height = 4.5, fig.alt = "TROP trajectory: observed vs. estimated Y(0) with the time-weight band along the bottom"}
+```{r trop-autoplot, eval = FALSE}
 autoplot(fit)
+```
+
+```{r trajectory-fig, opts.label = "fig"}
+knitr::include_graphics("../man/figures/trop_trajectory.png")
 ```
 
 ### Per-period effects (event study)
 
 `trop_event_study()` breaks the single ATT into per-period effects indexed by
 event time (periods relative to each unit's first treated period). It reuses the
-fit's resampling — aggregating each resample's per-cell effects *by event time*
-rather than into one mean — so it adds no modelling assumptions beyond those of
+fit's resampling --- aggregating each resample's per-cell effects *by event time*
+rather than into one mean --- so it adds no modelling assumptions beyond those of
 the fit itself. With `pre_periods = TRUE` (the default) the pre-treatment gaps
 come back as placebo / pre-trend points, and `autoplot()` draws the event-study
 figure: per-period points with pointwise confidence bars, pre-treatment points
@@ -159,16 +165,81 @@ flat pre-period profile and a clear post-treatment jump are the visual signature
 of a credible design. The per-period intervals are wider than the overall ATT
 interval and are pointwise rather than simultaneous.
 
-```{r trop-event, fig.width = 6, fig.height = 4.5, fig.alt = "TROP event study: per-period ATT against event time with pointwise confidence bars and pre-treatment placebo points"}
+```{r trop-event}
 es <- trop_event_study(fit, se = "bootstrap")   # bootstrap is the default
 es
+```
+
+```{r es-code, eval = FALSE}
 autoplot(es)
+```
+
+```{r es-fig, opts.label = "fig"}
+knitr::include_graphics("../man/figures/trop_event_study_bootstrap.png")
+```
+
+### Is the effect distinguishable from zero? A placebo test
+
+`trop_placebo_test()` asks a different question from the standard errors above:
+*could an effect this large appear by chance if the treatment did nothing?* It
+takes a fitted `trop` object, repeatedly re-assigns the treated units' timing
+pattern to randomly chosen **control** units (where the true effect is zero),
+re-estimates the ATT at the fit's selected penalties, and builds the resulting
+**placebo null distribution**. The observed ATT is then compared against that
+null; the share of placebo draws as extreme as the observed effect is the
+`p.value` (`alternative` chooses a one- or two-sided test).
+
+```{r placebo-test}
+pt <- trop_placebo_test(fit, B = 500)
+pt
+```
+
+`autoplot()` draws the null as a histogram with the observed ATT marked, so it is
+easy to see whether the real estimate sits in the tail:
+
+```{r pt-code, eval = FALSE}
+autoplot(pt)
+```
+
+```{r pt-fig, opts.label = "fig"}
+knitr::include_graphics("../man/figures/placebo_test.png")
+```
+
+This randomization test is the recommended tool for the "is it distinguishable
+from zero" question; use the bootstrap or jackknife (below) for a standard error
+and confidence interval on the effect size itself.
+
+### Comparing standard-error methods
+
+The point estimate is fixed by cross-validation; only the *interval* depends on
+how you resample. `compare_se_modes()` refits the same estimate under each SE
+method so you can see how the intervals differ:
+
+```{r se-modes}
+se_cmp <- compare_se_modes(
+  df, "y", "w", "id", "t",
+  se = c("bootstrap", "jackknife"),
+  control = trop_control(n_cv_cells = 12L, cv_cycles = 1L)
+)
+se_cmp
+```
+
+`autoplot()` shows one interval per method with a common estimate. Zero is always
+drawn (a dashed reference line) and kept in view, because for inference what
+matters is whether the interval clears zero:
+
+```{r se-code, eval = FALSE}
+autoplot(se_cmp)
+```
+
+```{r se-fig, opts.label = "fig"}
+knitr::include_graphics("../man/figures/se_comparison.png")
 ```
 
 ### Recovering special cases
 
 The TROP program nests DID and matrix completion. Fixing the penalties by hand
-matches them numerically, which is useful as a sanity check:
+matches them numerically, which is a useful sanity check:
 
 ```{r special}
 did <- trop(df, "y", "w", "id", "t",
@@ -181,37 +252,45 @@ c(DID = did$att, MC = mc$att, TROP = fit$att)
 With `lambda_nn = Inf` and uniform weights the low-rank term vanishes and the fit
 is ordinary two-way fixed effects; with a finite `lambda_nn` and uniform weights
 it is matrix completion; letting cross-validation pick the unit and time weights
-gives the full TROP estimator.
+gives the full TROP estimator. Passing an explicit `lambda` also skips
+cross-validation entirely --- the way to line cfcompare up against another TROP
+implementation on identical penalties.
 
-### Penalty ablation table
+### Penalty ablation
 
-`trop_ablation()` runs that whole sweep of constraints for you — full TROP, then
-dropping the unit weights, the time weights, the regression adjustment, and the
-combinations that reduce to matrix completion and difference-in-differences — and
-returns it as a table (the robustness exercise behind the paper's Table 5)
-instead of a plot.
+`trop_ablation()` runs that whole sweep of constraints for you --- full TROP,
+then dropping the unit weights, the time weights, the regression adjustment, and
+the combinations that reduce to matrix completion and difference-in-differences.
+With `rmse = TRUE` it scores each specification by placebo RMSE relative to full
+TROP (the robustness exercise behind the paper's Table 5, `TROP = 1.00`):
 
 ```{r ablation}
 ab <- trop_ablation(df, "y", "w", "id", "t",
+                    rmse = TRUE, horizon = 3, n_pseudo = 5, n_runs = 100,
                     control = trop_control(n_cv_cells = 12L, cv_cycles = 1L))
 ab
 ```
 
-Print it for the console, or `format()` it to paste-ready LaTeX (booktabs) or
-Markdown for a paper or report; pass `se = "jackknife"` (or any [trop()] SE
-method) to add standard-error and confidence-interval columns. Because the result
+`format()` renders it as paste-ready LaTeX (booktabs) or Markdown, `plot()` draws
+the paper-style table as a figure, and passing `se = "jackknife"` (or any [trop()]
+SE method) adds standard-error and confidence-interval columns. Because the result
 is an ordinary `data.frame`, it also drops straight into `knitr::kable()`,
 `gt::gt()`, and similar.
 
-```{r ablation-latex, eval = FALSE}
+```{r ablation-fmt, eval = FALSE}
 cat(format(ab, "latex"), sep = "\n")     # needs \usepackage{booktabs}
 writeLines(format(ab, "markdown"))
+plot(ab)                                 # paper-style Table-5 figure
+```
+
+```{r ablation-fig, opts.label = "fig"}
+knitr::include_graphics("../man/figures/trop_ablation.png")
 ```
 
 ### Adding covariates
 
 When covariates help explain the untreated outcome, the low-rank term can be
-split additively as `L_js = X_js·φ + R_js` (Section 6.2): the covariate-linear
+split additively as `L_js = X_js·phi + R_js` (Section 6.2): the covariate-linear
 part is unpenalised and the nuclear norm applies to the residual `R`. Pass the
 column names through `covariates`; cross-validation is then run on the
 covariate-residualised model, and the coefficients come back in `$phi`.
@@ -232,7 +311,7 @@ event study, the standard errors, and the plotted counterfactual automatically.
 ### A common counterfactual across methods
 
 `counterfactual_matrix()` (alias `predict_counterfactual()`) returns any fit's
-estimated `Y(0)` as an `N × T` matrix, so methods can be compared on the same
+estimated `Y(0)` as an `N x T` matrix, so methods can be compared on the same
 grid:
 
 ```{r cf-matrix}
@@ -244,7 +323,7 @@ For native engines every cell is filled; methods that only define a treated-unit
 counterfactual fill the treated rows and leave controls `NA`. This common
 interface is what lets `panel_rmse(metric = "prediction")` score the paper's
 Table-1 unit-period prediction error across DID, MC, TROP and DIFP (and SDID/SC
-when `synthdid` is installed).
+when `synthdid` is installed); `metric = "placebo"` scores placebo RMSE instead.
 
 ```{r pred-rmse, eval = FALSE}
 panel_rmse(df, "y", "w", "id", "t",
@@ -252,10 +331,14 @@ panel_rmse(df, "y", "w", "id", "t",
            metric = "prediction", horizon = 3, n_pseudo = 5, n_runs = 5, seed = 1)
 ```
 
+```{r rmse-fig, opts.label = "fig"}
+knitr::include_graphics("../man/figures/rmse_prediction.png")
+```
+
 ## Bringing your own results
 
-If you already ran an estimator elsewhere — say `synthdid` directly — coerce it
-onto the shared schema with `as_att()` and combine it with native fits:
+If you already ran an estimator elsewhere --- say `synthdid` directly --- coerce
+it onto the shared schema with `as_att()` and combine it with native fits:
 
 ```{r byo, eval = FALSE}
 library(synthdid)
@@ -277,22 +360,23 @@ and are skipped, with a note, on other designs.
 
 By default the native engines report a **bootstrap** standard error: a
 unit-level stratified block bootstrap (resampling treated and control units
-separately, with replacement, keeping each unit's full time series), the
-approach used for TROP's standard errors and confidence intervals in the paper.
-Percentile intervals are the default; tune the bootstrap with
-`trop_control(n_boot =, boot_ci =)`. Two alternatives are available via `se =`:
-**jackknife** (leave-one-treated-unit-out; needs at least two treated units) and
-**placebo** (assign the treated pattern to controls; for a single treated unit).
-`se = "auto"` picks jackknife when there are at least two treated units and
-placebo otherwise. These are practical approximations; see Section 6 of the
-paper for the estimator's formal inference theory.
+separately, with replacement, keeping each unit's full time series), the approach
+used for TROP's standard errors and confidence intervals in the paper. Percentile
+intervals are the default; tune the bootstrap with
+`trop_control(n_boot =, boot_ci =)`. The alternative is **jackknife**
+(leave-one-treated-unit-out; it needs at least two treated units), available via
+`se = "jackknife"`. `se = "auto"` picks jackknife when there are at least two
+treated units and falls back to the bootstrap otherwise. These are practical
+approximations; see Section 6 of the paper for the estimator's formal inference
+theory. For "is the effect distinguishable from zero" as a hypothesis, use
+`trop_placebo_test()` (above) rather than a standard error.
 
 ## Performance
 
 The native solver runs on base R by default, but two settings speed it up on
 larger panels (both via `trop_control()`):
 
-* **`svd`** — the soft-impute step uses a **truncated SVD by default**
+* **`svd`** --- the soft-impute step uses a **truncated SVD by default**
   (`svd = "truncated"`), computing only the leading singular triplets with
   `RSpectra` when it is installed (and falling back to the full base-R `svd()`
   otherwise). The TROP paper explicitly permits a truncated decomposition for the
@@ -300,9 +384,9 @@ larger panels (both via `trop_control()`):
   `svd = "full"` to force the exact full decomposition; that is what the README's
   numerical-agreement checks against the official Python package use, so the
   comparison is exact rather than up to truncation tolerance.
-* **`workers`** — the bootstrap / jackknife / placebo standard errors, the
+* **`workers`** --- the bootstrap and jackknife standard errors, the
   cross-validation cells, and the `panel_rmse()` placebo runs are run in parallel
-  when `workers > 1` (using `future.apply`/`future`, if installed). Estimates
+  when `workers > 1` (using `future.apply` / `future`, if installed). Estimates
   remain reproducible given `seed`.
 
 ```{r perf, eval = FALSE}
@@ -312,5 +396,6 @@ trop(df, "y", "w", "id", "t", se = "bootstrap",
 
 ## Reference
 
-Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025). *Triply Robust Panel
-Estimators.* arXiv:2508.21536.
+Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026). *Triply Robust Panel
+Estimators.* Journal of Applied Econometrics.
+<https://doi.org/10.1002/jae.70061> (working paper: arXiv:2508.21536).
