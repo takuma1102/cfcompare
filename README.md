@@ -223,15 +223,17 @@ package on exactly comparable weighted-TWFE sample datasets, using
 `trop_control(svd = "full")`, and the results agree to numerical tolerance.
 `trop_matrix()` provides a matrix-in interface for direct cross-checks.
 
-> Technical note: There are a few differences for this package's estimation. First, `cfcompare`'s default `trop()` uses the
-> paper's general unit/time distances, so it applies beyond simple block designs.
+> Technical note: There are a few technical differences for this package's estimation from official packages.
+> First, `cfcompare`'s default `trop()` uses the paper's general unit/time distances, so it applies beyond simple block designs.
 > Second, finite nuclear-norm penalties are solved with a proximal-gradient
-> soft-impute routine, so exact digits need not match convex-solver implementations
-> outside the comparable special cases. Third, penalties are chosen by leave-one-control-cell-out prediction error; implementations that tune by placebo-RMSE, or that
-> standardize the outcome, may select different `lambda`. Lastly, estimation uses the raw outcome (no standardization), so
-> `lambda` values are on the outcome's natural scale. To reconcile exactly with another implementation, fix the penalties via
+> soft-impute routine, as opposed to FISTA or SCS, so that the implementation depends only on base R. Thus, exact digits need not perfectly match convex-solver implementations
+> outside the comparable special cases.
+> Third, penalties are chosen by leave-one-control-cell-out prediction error, as opposed to being tuned by placebo-RMSE.
+> Fourth, this package supports both anchoring modes of per-cell (solving a separate local weighting problem for each treated cell) and pooled method (constructing one set of weights anchored on the treated group/periods; faster than per-cell).
+> Lastly, estimation uses the raw outcome (no standardization), so that `lambda` values are on the outcome's natural scale.
+> To reconcile these differences exactly with another official implementation, fix the penalties via
 > `lambda = list(time=, unit=, nn=)` (bypassing CV), set `svd = "full"`, and match
-> its `anchor`; setting `lambda_unit = lambda_time = 0` reduces every implementation to the same weighted MC/TWFE fit.
+> its `anchor`.
 
 ## More details
 
