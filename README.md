@@ -233,6 +233,7 @@ package on exactly comparable weighted-TWFE sample datasets, using
 > outside the comparable special cases.
 > Third, penalties are chosen by leave-one-control-cell-out prediction error, as opposed to being tuned by placebo-RMSE.
 > Fourth, this package supports both anchoring modes of per-cell (solving a separate local weighting problem for each treated cell) and pooled methods (constructing one set of weights anchored on the entire treated group/periods; faster than per-cell).
+> Fifth, this package allows to use covariates through `panel_compare`.
 > Lastly, estimation uses the raw outcome (no standardization), so that `lambda` values are on the outcome's natural scale.
 > To reconcile these differences exactly with another official implementation, fix the penalties via
 > `lambda = list(time=, unit=, nn=)` (bypassing CV), set `svd = "full"`, and match
