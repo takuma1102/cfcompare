@@ -40,9 +40,10 @@
 #' `lambda_nn = Inf` the low-rank term is dropped and the fit is weighted two-way
 #' fixed effects, matching the reference to numerical tolerance. With a finite
 #' `lambda_nn` the nuclear-norm term is solved by this package's
-#' proximal-gradient routine; because that uses a different parameterisation from
-#' the reference's convex solver, finite-penalty results agree in behaviour but
-#' not to the last digit.
+#' proximal-gradient / soft-impute routine, which targets the same convex program
+#' as eq. (2) (loss `sum_js w (Y - alpha - beta - L)^2`, with no 1/2 factor);
+#' `lambda_nn` is therefore on the same scale as the official Python and Stata
+#' packages, and finite-penalty results agree with them to solver tolerance.
 #'
 #' @param Y N x T outcome matrix.
 #' @param W N x T 0/1 treatment matrix (1 = actively treated cell).

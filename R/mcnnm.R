@@ -169,7 +169,15 @@
   ones_N <- rep(1, N)
   a <- numeric(N); b <- numeric(Tt); g <- 0
   L <- if (is.null(L_init)) matrix(0, N, Tt) else L_init
-  thr <- lambda / Lip
+  # Soft-threshold for the nuclear-norm prox. The loss is the natural
+  # sum-of-squares  sum_js w_js (Y_js - a_j - b_s - L_js)^2  (paper eq. (2); no
+  # 1/2 factor), matching the official Python and Stata packages. The gradient
+  # step below moves M by  w (Y - M) / Lip, i.e. a step of 1 / (2 * Lip) on that
+  # loss (whose gradient has Lipschitz constant 2 * Lip), so the matching
+  # threshold is lambda / (2 * Lip). Using lambda / Lip would instead solve the
+  # 1/2-loss variant and make lambda_nn half of the paper's / Python's / Stata's
+  # scale.
+  thr <- lambda / (2 * Lip)
   rnk <- 0L
   it <- 0L
 
