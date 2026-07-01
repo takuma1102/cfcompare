@@ -174,10 +174,15 @@ Other targeted diagnostics are available when needed:
 
 ```r
 trop_ablation(df, "y", "w", "id", "t")  # see below
-compare_se_modes(df, "y", "w", "id", "t", se = c("bootstrap", "jackknife"))
 ```
 
 <img src="man/figures/trop_ablation.png" alt="Ablation Table" />
+
+```r
+compare_se_modes(df, "y", "w", "id", "t", se = c("bootstrap", "jackknife"))  # see below
+```
+<img src="man/figures/se_comparison.png" alt="Bootstrap v. jackknife" />
+
 
 ```r
 trop_event_study(fit, se = "bootstrap")
@@ -187,20 +192,20 @@ trop_event_study(fit, se = "bootstrap")
 ## Designs and inference
 
 The treatment column is the active 0/1 treatment indicator for each unit-time
-cell. The native engines handle block, staggered, and non-absorbing treatment
-patterns. `SDID` and `SC` are block-design methods and are skipped otherwise.
-`CS` is opt-in and requires absorbing staggered/block treatment.
+cell. The TROP diagnosis handles block, staggered, and non-absorbing treatment
+patterns under the same schema. By contrast, `SDID` and `SC` are block-design methods and are skipped otherwise.
+`CS` is opt-in and requires absorbing staggered treatment.
 
 Native estimators support `se = "bootstrap"`, `"jackknife"`, and
 `"none"` where applicable. These are practical resampling choices for the R
 workflow; use the TROP paper for formal inference conditions.
 
-## Numerical agreement and deliberate differences
+## Numerical agreement with and differences from the official packages
 
-The TROP engine is written independently in base R from the paper's equations.
+The TROP engine in this package is written in base R.
 For correctness checks, it has been compared with the official Python `trop`
-package on exactly comparable weighted-TWFE special cases, using
-`trop_control(svd = "full")`; the results agree to numerical tolerance.
+package on exactly comparable weighted-TWFE sample datasets, using
+`trop_control(svd = "full")`, and the results agree to numerical tolerance.
 `trop_matrix()` provides a matrix-in interface for direct cross-checks.
 
 > Technical note: There are a few differences for this package's estimation. First, `cfcompare`'s default `trop()` uses the
@@ -237,8 +242,8 @@ code.
 
 ## Citation
 
-`cfcompare` is an independent implementation of TROP. If you use the TROP estimator,
-please cite the original paper:
+`cfcompare` is an independent package to implement TROP. If you use the TROP estimator,
+please cite the original JAM paper:
 
 - Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026). *Triply Robust Panel
   Estimators.* Journal of Applied Econometrics, 1--16.
