@@ -14,6 +14,8 @@ trop_control(
   n_boot = 200L,
   boot_ci = c("percentile", "normal"),
   svd = c("truncated", "full"),
+  cv_method = c("loocv", "placebo"),
+  n_placebo = 30L,
   workers = 1L,
   seed = NULL
 )
@@ -43,6 +45,17 @@ trop_control(
 falling back to the full SVD otherwise; \code{"full"} always uses the exact base
 R \code{svd()}. The two agree to numerical tolerance; \code{"truncated"} is faster on
 large panels, \code{"full"} is used for exact numerical-agreement checks.}
+
+\item{cv_method}{Penalty cross-validation criterion. \code{"loocv"} (default)
+scores held-out control-cell prediction error (the paper's eq. (4)-(5));
+\code{"placebo"} instead assigns placebo blocks to control units and minimises
+the mean squared placebo ATT (the placebo-RMSE criterion used by the
+official Python/Stata packages). Ignored when the penalties are supplied via
+\code{lambda} (CV is then skipped). The placebo criterion always uses the pooled
+(block-centre) ATT, even when the final fit uses \code{anchor = "per_cell"}.}
+
+\item{n_placebo}{Number of placebo assignments drawn when
+\code{cv_method = "placebo"} (larger is more stable but slower).}
 
 \item{workers}{Number of parallel workers for the embarrassingly parallel
 loops (cross-validation cells, and the bootstrap / jackknife

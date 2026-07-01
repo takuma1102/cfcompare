@@ -104,6 +104,67 @@
   mean(errs)
 }
 
+# ---- placebo-RMSE cross-validation (option; Python/Stata-style) -------------
+
+#' Placebo draws for placebo-RMSE penalty selection.
+#'
+#' Restricts the panel to control units (drops the real treated rows), then
+#' draws `ctrl$n_placebo` placebo assignments; each treats as many randomly
+#' chosen control units as the real design, over the same post-block. Unit
+#' distances are precomputed per draw (they do not depend on the penalties), so
+#' the coordinate-descent search reuses them across every penalty evaluation.
+#' @keywords internal
+#' @noRd
+.trop_placebo_setup <- function(Y, W, pat, ctrl) {
+  ctrl_units <- setdiff(seq_len(nrow(Y)), pat$treated_units)
+  Yp <- Y[ctrl_units, , drop = FALSE]
+  post_cols <- which(colSums(W[pat$treated_units, , drop = FALSE]) > 0)
+  n_tr <- length(pat$treated_units)
+  n_pl <- ctrl$n_placebo %||% 30L
+  if (length(ctrl_units) <= n_tr || length(post_cols) == 0L ||
+      length(post_cols) >= ncol(Yp)) {
+    stop("Not enough control units / periods for placebo cross-validation.",
+         call. = FALSE)
+  }
+  if (!is.null(ctrl$seed)) {
+    old <- .Random.seed_safe()
+    on.exit(.Random.seed_restore(old), add = TRUE)
+    set.seed(ctrl$seed)
+  }
+  draws <- lapply(seq_len(n_pl), function(b) {
+    tr <- sample.int(nrow(Yp), n_tr)
+    Wp <- matrix(0, nrow(Yp), ncol(Yp))
+    Wp[tr, post_cols] <- 1
+    list(Wp = Wp, du = .unit_distance_pooled(Yp, Wp, tr), post_cols = post_cols)
+  })
+  list(Yp = Yp, ctrl_units = ctrl_units, draws = draws)
+}
+
+#' Placebo-RMSE criterion: mean squared placebo ATT across the draws.
+#'
+#' Each placebo ATT is the pooled (block-centre) estimate on the control panel,
+#' matching the `TROP_TWFE_average` placebo tuning of the official Python
+#' package. The true placebo effect is zero, so smaller is better. Penalty
+#' selection therefore uses the pooled ATT even when the final fit uses
+#' `anchor = "per_cell"`.
+#' @keywords internal
+#' @noRd
+.trop_cv_Q_placebo <- function(pb, lam, ctrl, X = NULL) {
+  Yp <- pb$Yp; Tt <- ncol(Yp)
+  one <- function(k) {
+    d <- pb$draws[[k]]
+    tp_pool  <- length(unique(d$post_cols))
+    t_center <- (Tt - tp_pool / 2) + 1
+    wmat <- .trop_weight_matrix(d$du, t_center, Tt, lam)
+    fit  <- .trop_solve(Yp, d$Wp, wmat, lam, ctrl, X = X)
+    mean((Yp - fit$M)[d$Wp == 1])^2
+  }
+  par <- (ctrl$workers %||% 1L) > 1L
+  errs <- unlist(.par_lapply(seq_along(pb$draws), one, parallel = par),
+                 use.names = FALSE)
+  mean(errs)
+}
+
 #' Coordinate-descent search over (lambda_time, lambda_unit, lambda_nn).
 #'
 #' Follows the warm-start scheme of footnote 2 of the paper: start from
@@ -112,18 +173,31 @@
 #' @keywords internal
 #' @noRd
 .trop_select_lambda <- function(Y, W, grids, ctrl, cv_cells, verbose = FALSE,
-                                X = NULL) {
+                                X = NULL, pat = NULL) {
   lam <- list(time = 0, unit = 0, nn = Inf)
-  # Unit distances for each held-out CV cell do not depend on the penalties, so
-  # compute them once and reuse across the whole penalty search (big saving:
-  # the search evaluates the CV criterion dozens of times).
-  du_cache <- lapply(seq_len(nrow(cv_cells)), function(k) {
-    i <- cv_cells[k, 1]; t <- cv_cells[k, 2]
-    Wk <- W; Wk[i, t] <- 1
-    .unit_distance_to(Y, Wk, i, t)
-  })
-  eval_one <- function(lam) .trop_cv_Q(Y, W, lam, ctrl, cv_cells,
-                                       du_list = du_cache, X = X)
+  if (identical(ctrl$cv_method %||% "loocv", "placebo")) {
+    # Placebo-RMSE criterion (option): assign placebo blocks to control units and
+    # minimise the mean squared placebo ATT (as in the official Python/Stata
+    # packages). See .trop_placebo_setup() / .trop_cv_Q_placebo().
+    if (is.null(pat)) pat <- .assignment_pattern(W)
+    pb <- .trop_placebo_setup(Y, W, pat, ctrl)
+    Xp <- if (is.null(X)) NULL else
+      lapply(.as_cov_list(X, nrow(Y), ncol(Y)),
+             function(M) M[pb$ctrl_units, , drop = FALSE])
+    eval_one <- function(lam) .trop_cv_Q_placebo(pb, lam, ctrl, X = Xp)
+  } else {
+    # Default: leave-one-control-cell-out prediction error (eq. (4)-(5)). Unit
+    # distances for each held-out CV cell do not depend on the penalties, so
+    # compute them once and reuse across the whole penalty search (big saving:
+    # the search evaluates the CV criterion dozens of times).
+    du_cache <- lapply(seq_len(nrow(cv_cells)), function(k) {
+      i <- cv_cells[k, 1]; t <- cv_cells[k, 2]
+      Wk <- W; Wk[i, t] <- 1
+      .unit_distance_to(Y, Wk, i, t)
+    })
+    eval_one <- function(lam) .trop_cv_Q(Y, W, lam, ctrl, cv_cells,
+                                         du_list = du_cache, X = X)
+  }
 
   pick <- function(lam, which, grid) {
     qs <- vapply(grid, function(v) {
@@ -300,7 +374,8 @@ trop <- function(data, outcome, treatment, unit, time,
   # ---- choose penalties via CV (unless supplied) ----
   if (is.null(lambda)) {
     cv_cells <- .sample_control_cells(W, control$n_cv_cells, control$seed)
-    lam <- .trop_select_lambda(Y, W, grids, control, cv_cells, verbose, X = X)
+    lam <- .trop_select_lambda(Y, W, grids, control, cv_cells, verbose, X = X,
+                               pat = pat)
   } else {
     lam <- utils::modifyList(list(time = 0, unit = 0, nn = Inf), lambda)
     lam$Q <- NA_real_
@@ -370,8 +445,15 @@ trop <- function(data, outcome, treatment, unit, time,
 
   if (anchor == "pooled") {
     du <- .unit_distance_pooled(Y, W, pat$treated_units)
-    t_anchor <- sort(unique(treated_cells[, 2]))
-    wmat <- .trop_weight_matrix(du, t_anchor, Tt, lam)
+    # Anchor the time weights to the CENTRE of the treated block, matching the
+    # matrix-in trop_matrix()/.trop_reference_weights and the official Python
+    # TROP_TWFE_average (dist_time = |s - (T - tp/2)|). Passing the vector of
+    # treated periods to .trop_weight_matrix() would instead use the distance to
+    # the nearest treated period, which flattens theta across the block and does
+    # not match the reference.
+    tp_pool  <- length(unique(treated_cells[, 2]))
+    t_center <- (Tt - tp_pool / 2) + 1        # 1-based centre (s runs 1..Tt)
+    wmat <- .trop_weight_matrix(du, t_center, Tt, lam)
     fit <- .trop_solve(Y, W, wmat, lam, ctrl, X = X)
     Mhat <- fit$M
     rnk <- fit$rank
@@ -495,6 +577,15 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @param tol Solver convergence tolerance.
 #' @param n_cv_cells Number of control cells sampled for the CV criterion.
 #' @param cv_cycles Number of coordinate-descent cycles in penalty selection.
+#' @param cv_method Penalty cross-validation criterion. `"loocv"` (default)
+#'   scores held-out control-cell prediction error (the paper's eq. (4)-(5));
+#'   `"placebo"` instead assigns placebo blocks to control units and minimises
+#'   the mean squared placebo ATT (the placebo-RMSE criterion used by the
+#'   official Python/Stata packages). Ignored when the penalties are supplied via
+#'   `lambda` (CV is then skipped). The placebo criterion always uses the pooled
+#'   (block-centre) ATT, even when the final fit uses `anchor = "per_cell"`.
+#' @param n_placebo Number of placebo assignments drawn when
+#'   `cv_method = "placebo"` (larger is more stable but slower).
 #' @param max_cells Threshold for `anchor = "auto"` to switch to pooled weights.
 #' @param conf_level Confidence level for intervals.
 #' @param n_boot Number of replications for the bootstrap standard error
@@ -521,14 +612,17 @@ trop_control <- function(max_iter = 200L, tol = 1e-5,
                          max_cells = 60L, conf_level = 0.95,
                          n_boot = 200L, boot_ci = c("percentile", "normal"),
                          svd = c("truncated", "full"),
+                         cv_method = c("loocv", "placebo"), n_placebo = 30L,
                          workers = 1L,
                          seed = NULL) {
   boot_ci <- match.arg(boot_ci)
   svd <- match.arg(svd)
+  cv_method <- match.arg(cv_method)
   list(max_iter = max_iter, tol = tol, n_cv_cells = n_cv_cells,
        cv_cycles = cv_cycles, max_cells = max_cells,
        conf_level = conf_level, n_boot = n_boot, boot_ci = boot_ci,
-       svd = svd, workers = workers,
+       svd = svd, cv_method = cv_method, n_placebo = n_placebo,
+       workers = workers,
        seed = seed)
 }
 
@@ -571,8 +665,12 @@ print.trop <- function(x, ...) {
 .trop_pooled_M <- function(Y, W, lam, ctrl, pat, X = NULL) {
   tu <- pat$treated_units
   du <- .unit_distance_pooled(Y, W, tu)
-  t_anchor <- sort(unique(which(W == 1, arr.ind = TRUE)[, 2]))
-  wmat <- .trop_weight_matrix(du, t_anchor, ncol(Y), lam)
+  # Block-centre time anchoring, consistent with .trop_att(anchor = "pooled"),
+  # trop_matrix() and the official Python TROP_TWFE_average.
+  tcells   <- which(W == 1, arr.ind = TRUE)
+  tp_pool  <- length(unique(tcells[, 2]))
+  t_center <- (ncol(Y) - tp_pool / 2) + 1
+  wmat <- .trop_weight_matrix(du, t_center, ncol(Y), lam)
   .trop_solve(Y, W, wmat, lam, ctrl, X = X)$M
 }
 
