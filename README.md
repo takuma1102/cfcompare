@@ -192,6 +192,18 @@ trop_event_study(fit, se = "bootstrap")
 ```
 <img src="man/figures/trop_event_study_bootstrap.png" alt="Event Study Plot" />
 
+For placebo test relabeling control units as pseudo-treated, use `trop_placebo_test()` (penalties are held fixed).
+
+```r
+pt <- trop_placebo_test(
+  fit, B = 500L, alternative = "two.sided"
+)
+
+autoplot(pt)    # histogram of the null; observed ATT (red solid line) and 0 (dashed); see below.
+```
+
+<img src="man/figures/placebo_test.png" alt="Placebo test result" />
+
 ## Designs and inference
 
 The treatment column is the active 0/1 treatment indicator for each unit-time
