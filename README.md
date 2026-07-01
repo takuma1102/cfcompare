@@ -234,8 +234,8 @@ For more details, use the package help topics:
 ?compare_se_modes
 ```
 
-The source vignette is in [`vignettes/cfcompare.Rmd`](vignettes/cfcompare.Rmd);
-this can later be surfaced through pkgdown.
+The source vignette is now being developed and the current version is stored in [`vignettes/cfcompare.Rmd`](vignettes/cfcompare.Rmd);
+this will later be surfaced through pkgdown after being finalized.
 
 ## Status
 
