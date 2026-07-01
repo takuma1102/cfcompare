@@ -205,11 +205,15 @@ package on exactly comparable weighted-TWFE special cases, using
 `trop_control(svd = "full")`; the results agree to numerical tolerance.
 `trop_matrix()` provides a matrix-in interface for direct cross-checks.
 
-> Technical note: There are two differences for this package's estimation. First, `cfcompare`'s default `trop()` uses the
+> Technical note: There are a few differences for this package's estimation. First, `cfcompare`'s default `trop()` uses the
 > paper's general unit/time distances, so it applies beyond simple block designs.
 > Second, finite nuclear-norm penalties are solved with a proximal-gradient
 > soft-impute routine, so exact digits need not match convex-solver implementations
-> outside the comparable special cases.
+> outside the comparable special cases. Third, penalties are chosen by leave-one-control-cell-out prediction error; implementations that tune by placebo-RMSE, or that
+> standardize the outcome, may select different `lambda`. Lastly, estimation uses the raw outcome (no standardization), so
+> `lambda` values are on the outcome's natural scale. To reconcile exactly with another implementation, fix the penalties via
+> `lambda = list(time=, unit=, nn=)` (bypassing CV), set `svd = "full"`, and match
+> its `anchor`; setting `lambda_unit = lambda_time = 0` reduces every implementation to the same weighted MC/TWFE fit.
 
 ## More details
 
