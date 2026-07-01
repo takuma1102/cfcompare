@@ -8,15 +8,20 @@
 #' Refits the TROP estimator under several inference methods --- the unit-level
 #' stratified block bootstrap and/or the leave-one-treated-unit-out jackknife ---
 #' and returns the estimate, standard error and confidence interval from each on
-#' the common [`cf_att_tbl`][as_att] schema. The cross-validated penalties are
-#' chosen once (a single `se = "none"` fit) and reused for every inference
-#' method, exactly as [trop_ablation()] reuses one fit's penalties, so the ATT is
+#' the common [`cf_att_tbl`][as_att] schema. The penalties are chosen once (a
+#' single `se = "none"` fit --- by cross-validation, or fixed up front with
+#' `lambda`) and reused for every inference method, exactly as [trop_ablation()]
+#' reuses one fit's penalties, so the ATT is
 #' identical across rows and only the uncertainty changes. This is the table to
 #' reach for when checking how sensitive the confidence interval is to the choice
 #' of resampling scheme --- it is an *inference-mode* comparison, not an
 #' estimator comparison, so all rows share one point estimate by construction.
 #'
 #' @param data,outcome,treatment,unit,time,covariates Passed to [trop()].
+#' @param lambda Optional named list `list(time=, unit=, nn=)` to fix the
+#'   penalties and skip cross-validation, exactly as in [trop()]. When `NULL`
+#'   (the default) the penalties are chosen once by cross-validation; either way
+#'   the resolved penalties are shared by every inference method.
 #' @param se Character vector of inference methods to compare; any of
 #'   `"bootstrap"`, `"jackknife"`. Defaults to both. (To compare anchors or
 #'   penalty constraints instead, see [trop()]'s `anchor` argument and
@@ -37,10 +42,16 @@
 #' \donttest{
 #' compare_se_modes(df, "y", "w", "id", "t",
 #'                  control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#'
+#' # Fix the penalties (skip cross-validation), as with trop()'s `lambda`:
+#' compare_se_modes(df, "y", "w", "id", "t",
+#'                  lambda = list(time = 0, unit = 0, nn = Inf),
+#'                  control = trop_control(n_boot = 50L))
 #' }
 #' @export
 compare_se_modes <- function(data, outcome, treatment, unit, time,
                              covariates = NULL,
+                             lambda = NULL,
                              se = c("bootstrap", "jackknife"),
                              anchor = "pooled",
                              control = trop_control(),
@@ -57,7 +68,7 @@ compare_se_modes <- function(data, outcome, treatment, unit, time,
   # One cross-validated fit supplies both the point estimate and the penalties
   # reused (fixed) by every inference method below.
   fit0 <- trop(data, outcome, treatment, unit, time,
-               covariates = covariates, anchor = anchor,
+               covariates = covariates, lambda = lambda, anchor = anchor,
                se = "none", control = control)
   lam0 <- fit0$lambda
   lam <- list(time = lam0$time, unit = lam0$unit, nn = lam0$nn)

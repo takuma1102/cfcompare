@@ -11,6 +11,7 @@ compare_se_modes(
   unit,
   time,
   covariates = NULL,
+  lambda = NULL,
   se = c("bootstrap", "jackknife"),
   anchor = "pooled",
   control = trop_control(),
@@ -19,6 +20,11 @@ compare_se_modes(
 }
 \arguments{
 \item{data, outcome, treatment, unit, time, covariates}{Passed to \code{\link[=trop]{trop()}}.}
+
+\item{lambda}{Optional named list \code{list(time=, unit=, nn=)} to fix the
+penalties and skip cross-validation, exactly as in \code{\link[=trop]{trop()}}. When \code{NULL}
+(the default) the penalties are chosen once by cross-validation; either way
+the resolved penalties are shared by every inference method.}
 
 \item{se}{Character vector of inference methods to compare; any of
 \code{"bootstrap"}, \code{"jackknife"}. Defaults to both. (To compare anchors or
@@ -44,9 +50,10 @@ and an explanatory \code{note}.
 Refits the TROP estimator under several inference methods --- the unit-level
 stratified block bootstrap and/or the leave-one-treated-unit-out jackknife ---
 and returns the estimate, standard error and confidence interval from each on
-the common \code{\link[=as_att]{cf_att_tbl}} schema. The cross-validated penalties are
-chosen once (a single \code{se = "none"} fit) and reused for every inference
-method, exactly as \code{\link[=trop_ablation]{trop_ablation()}} reuses one fit's penalties, so the ATT is
+the common \code{\link[=as_att]{cf_att_tbl}} schema. The penalties are chosen once (a
+single \code{se = "none"} fit --- by cross-validation, or fixed up front with
+\code{lambda}) and reused for every inference method, exactly as \code{\link[=trop_ablation]{trop_ablation()}}
+reuses one fit's penalties, so the ATT is
 identical across rows and only the uncertainty changes. This is the table to
 reach for when checking how sensitive the confidence interval is to the choice
 of resampling scheme --- it is an \emph{inference-mode} comparison, not an
@@ -57,6 +64,11 @@ df <- sim_panel(N = 24, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
 \donttest{
 compare_se_modes(df, "y", "w", "id", "t",
                  control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+
+# Fix the penalties (skip cross-validation), as with trop()'s `lambda`:
+compare_se_modes(df, "y", "w", "id", "t",
+                 lambda = list(time = 0, unit = 0, nn = Inf),
+                 control = trop_control(n_boot = 50L))
 }
 }
 \seealso{
