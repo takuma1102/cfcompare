@@ -170,19 +170,22 @@ surfaces$att                   # matrix behind the ATT surface
 <img src="man/figures/cv_surface.png" alt="Heatmap for cv" />
 <img src="man/figures/att_surface.png" alt="Heatmap for att" />
 
-Other targeted diagnostics are available when needed:
+Other targeted diagnostics are available when needed.
 
+Use `trop_ablation` when you want to check how RMSEs change in accordance with the change in lamda penalties. (See also Table 5 in the original paper.)
 ```r
 trop_ablation(df, "y", "w", "id", "t")  # see below
 ```
 
 <img src="man/figures/trop_ablation.png" alt="Ablation Table" />
 
+Use `compare_se_modes` when you want to compare bootstrap and jackknife standard errors.
 ```r
 compare_se_modes(df, "y", "w", "id", "t", se = c("bootstrap", "jackknife"))  # see below
 ```
 <img src="man/figures/se_comparison.png" alt="Bootstrap v. jackknife" />
 
+For event-study plots, use `trop_event_study`.
 
 ```r
 trop_event_study(fit, se = "bootstrap")
