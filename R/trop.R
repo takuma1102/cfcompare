@@ -175,7 +175,14 @@
     Z <- matrix(as.numeric(Z) - as.numeric(Xdd %*% cf), nrow(Y), ncol(Y))
   }
   s1 <- tryCatch(max(svd(Z)$d), error = function(e) 1)
-  nn_grid <- c(Inf, s1 * c(0.5, 0.25, 0.1, 0.05, 0.02))
+  # The solver's soft-threshold is lambda_nn / (2 * max(weight)) (paper eq. (2)
+  # loss, with no 1/2 factor), so with uniform weights the low-rank term is fully
+  # shrunk to zero once lambda_nn >= 2 * s1. These multipliers spread the finite
+  # grid over the non-degenerate range up to that point (the largest value nearly
+  # kills L; Inf gives exactly L = 0), and keep lambda_nn on the official
+  # Python/Stata scale. (Halving them would target the 1/2-loss variant and
+  # under-cover the strongly-regularised region.)
+  nn_grid <- c(Inf, s1 * c(1.0, 0.5, 0.2, 0.1, 0.04))
 
   # unit grid scaled by the median pairwise distance among control units
   tu <- which(rowSums(W) > 0)
