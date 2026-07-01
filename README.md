@@ -60,6 +60,7 @@ cmp <- panel_compare(
   outcome = "y", treatment = "w", unit = "id", time = "t",
   methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
   se = "bootstrap",  # You can also choose jackknife or "none" for running this faster.
+  # covariates = c("x1", "x2"),
   anchor  = "pooled",  # faster method
   # or "per-cell" (more accurate; in accordance with the original paper)
   # or "auto" (choosing "per-cell" or "pooled" depending on the number of treated cells) 
