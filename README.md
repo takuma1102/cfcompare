@@ -6,14 +6,14 @@
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- badges: end -->
 
-> **Note**: `cfcompare` is an independent R package. It is not endorsed or
+> **Note**: `cfcompare` is an independent R package. This is not officially endorsed or
 > maintained by the authors of the TROP article (Athey, Imbens, Qu & Viviano,
 > 2026). Official TROP software by the authors includes the Python package
 > [`trop`](https://pypi.org/project/trop/)
 > ([ostasovskyi/TROP-Estimator](https://github.com/ostasovskyi/TROP-Estimator))
 > and the Stata command
-> ([justinwaddy/TROP](https://github.com/justinwaddy/TROP)). Please cite the
-> TROP paper when using the TROP estimator; see [Citation](#citation) for more details.
+> ([justinwaddy/TROP](https://github.com/justinwaddy/TROP)). Please cite the original
+> TROP paper when using the TROP estimator. See [Citation](#citation) for more details.
 
 `cfcompare` implements the triply robust panel estimator (TROP) and puts it in a
 common R workflow with DID/TWFE, synthetic control, matrix completion, synthetic
@@ -24,7 +24,10 @@ Use `cfcompare` when you want to:
 - run several ATT estimators on one binary-treatment panel with `panel_compare()`;
 - get a shared tidy ATT table and shared plotting methods;
 - evaluate estimators by held-out RMSE with `panel_rmse()`;
-- inspect TROP tuning through lambda-grid CV-loss and ATT surfaces.
+- inspect TROP tuning through lambda grids with `trop_sensitivity` and `plot_trop_surfaces` (for CV-loss and ATT surfaces).
+
+> Note: all plots and tables shown in this README are based on a model sample dataset, and they are provided solely as
+> examples of the visualizations that can be created with this package.
 
 ## Installation
 
@@ -33,7 +36,7 @@ Use `cfcompare` when you want to:
 pak::pak("takuma1102/cfcompare")
 ```
 
-You can also install from R-universe.
+You can also install from R-universe. This package will be submitted to CRAN as well down the line.
 
 ```r
 install.packages(
@@ -56,40 +59,37 @@ cmp <- panel_compare(
   df,
   outcome = "y", treatment = "w", unit = "id", time = "t",
   methods = c("DID", "SDID", "SC", "MC", "DIFP", "TROP"),
-  se = "bootstrap"
+  se = "bootstrap"  # You can also choose jackknife or "none" for running this faster.
 )
 
 cmp$att                    # tidy ATT table, one row per method
-autoplot(cmp)              # forest plot of ATT estimates and intervals
+autoplot(cmp)              # forest plot of ATT estimates and intervals (see below for an example plot)
 ```
 
 <img src="man/figures/compare_forest.png" alt="Forest plot of ATT estimators" />
 
-```r
-plot_counterfactual(cmp)   # observed vs fitted untreated paths
-```
 
 ## Supported estimators
 
 | Method | Engine | `panel_compare()` default? | Notes |
 | --- | --- | --- | --- |
 | `TROP` | native R | yes | low-rank + two-way FE outcome model with unit/time weights |
-| `DID` | native R | yes | two-way fixed effects / difference-in-differences |
+| `DID` | native R | yes | two-way fixed effects |
 | `SC` | `synthdid` | yes | skipped if `synthdid` is unavailable or the design is unsupported |
 | `MC` | native R | yes | nuclear-norm matrix completion |
 | `SDID` | `synthdid` | yes | skipped if `synthdid` is unavailable or the design is unsupported |
-| `DIFP` | native R | yes | Doudchenko-Imbens-Ferman-Pinto demeaned SC with intercept |
+| `DIFP` | native R | yes | Doudchenko-Imbens-Ferman-Pinto estimator: demeaned SC with intercept |
 | `gsynth` | `gsynth` | no | optional interactive-fixed-effects / MC-style engine |
 | `augsynth` | `augsynth` | no | optional augmented synthetic control engine |
-| `CS` | `did` | no | Callaway--Sant'Anna; requires an absorbing staggered/block treatment |
+| `CS` | `did` | no | Callaway--Sant'Anna; requires an absorbing staggered treatment |
 
 By default, `panel_compare()` runs `TROP`, `DID`, `SC`, `MC`, `SDID`, and `DIFP`.
 Use `methods =` to specify an explicit set, or `exclude =` to drop one method
 from the default set. Optional engines whose package is missing, or whose design
-requirements are not met, are skipped with a message while the remaining methods
+requirements are not met (e.g., in terms of covariates), are skipped with a message while the remaining methods
 still run.
 
-## What cfcompare can do
+## Overview: what cfcompare can do
 
 `cfcompare` has basic functions for estimating the TROP estimator (the official Python and Stata projects are referenced). It also adds an R-native comparison and diagnostic layer around TROP:
 
@@ -104,7 +104,7 @@ still run.
 | Compare inference choices | `compare_se_modes()` | one ATT estimate with bootstrap, jackknife, and/or placebo uncertainty rows |
 | Reuse fitted counterfactuals | `counterfactual_matrix()` | common `N x T` estimated untreated-outcome matrix interface |
 
-## Out-of-sample RMSE comparison
+## Held-out RMSE comparison
 
 `panel_rmse()` compares estimators by how well they predict held-out outcomes.
 The default `metric = "placebo"` repeatedly assigns a placebo block to control
@@ -118,16 +118,15 @@ r <- panel_rmse(
 )
 
 r            # ranked table: method, rmse, rmse_se, engine, note
-autoplot(r)  # lower RMSE is better
+autoplot(r)  # see below for an example plot
 ```
 <img src="man/figures/rmse_placebo.png" alt="Placebo RMSE" />
 
- `metric = "prediction"` scores per-cell counterfactual prediction error through `counterfactual_matrix()`.
+ `metric = "prediction"` scores per-cell counterfactual prediction error.
  
 <img src="man/figures/rmse_prediction.png" alt="Prediction RMSE" />
 
-For quick diagnosis using large panels, reduce `n_runs` and TROP CV work, for example through
-`trop_control(n_cv_cells = , cv_cycles = )`.
+For quick diagnostics on large panels, use lighter TROP controls via `trop_control(n_cv_cells = , cv_cycles = , max_iter = )`.
 
 > **Note**: This is a **predictive** error on held-out cells, not estimation error against a
 > known effect. It is a different quantity from the *estimation* RMSE `sqrt(E[(tau_hat - tau)^2])` reported by `rmse_curve()` / `rmse_curves()` over
