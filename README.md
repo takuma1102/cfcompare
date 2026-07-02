@@ -64,7 +64,6 @@ cmp <- panel_compare(
   anchor  = "pooled",  # faster method
   # or "per-cell" (more accurate; in accordance with the original paper)
   # or "auto" (choosing "per-cell" or "pooled" depending on the number of treated cells)
-  # workers = n_parallel  # for faster execution 
 )
 
 cmp$att                    # tidy ATT table, one row per method
@@ -131,7 +130,7 @@ autoplot(r)  # see below for an example plot
  
 <img src="man/figures/rmse_prediction.png" alt="Prediction RMSE" />
 
-For quick diagnostics on large panels, reduce the outer repetition counts, such as `n_runs`, and use lighter TROP controls via `trop_control(n_cv_cells = , cv_cycles = , max_iter = )`.
+For quick diagnostics on large panels, reduce the outer repetition counts, such as `n_runs`, and use lighter TROP controls via `trop_control(n_cv_cells = , cv_cycles = , max_iter = , workers = )`.
 
 > **Note**: This is a **predictive** error on held-out cells, not estimation error against a
 > known effect. It is a different quantity from the *estimation* RMSE `sqrt(E[(tau_hat - tau)^2])` reported
