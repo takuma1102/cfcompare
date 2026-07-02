@@ -231,10 +231,10 @@ package on exactly comparable weighted-TWFE sample datasets, using
 > Second, finite nuclear-norm penalties are solved with a proximal-gradient
 > soft-impute routine, as opposed to FISTA or SCS, so that the implementation depends only on base R. Thus, exact digits need not perfectly match convex-solver implementations
 > outside the comparable special cases.
-> Third, penalties are chosen by leave-one-control-cell-out prediction error by default (`trop_control(cv_method = "loocv")`); a placebo-RMSE criterion matching the official Python/Stata packages is also available via `trop_control(cv_method = "placebo")`, which assigns placebo blocks to control units and minimises the mean squared placebo ATT.
+> Third, penalties are chosen by leave-one-control-cell-out prediction error by default (`trop_control(cv_method = "loocv")`), in accordance with the original paper; a placebo-RMSE criterion matching the official Python packages is also available via `trop_control(cv_method = "placebo")`, which assigns placebo blocks to control units and minimises the mean squared placebo ATT.
 > Fourth, this package supports both anchoring modes of per-cell (solving a separate local weighting problem for each treated cell) and pooled methods (constructing one set of weights anchored on the entire treated group/periods using `trop_matrix()`; faster than per-cell).
 > Fifth, this package allows to use covariates through `panel_compare`.
-> Lastly, estimation uses the raw outcome (no standardization), so that `lambda` values are on the outcome's natural scale.
+> Lastly, estimation uses the raw, non-standardized outcome in the same manner as the original paper, so that `lambda` values are on the outcome's natural scale.
 > To reconcile these differences exactly with another official implementation, fix the penalties via
 > `lambda = list(time=, unit=, nn=)` (bypassing CV), set `svd = "full"`, and match
 > its `anchor`.
