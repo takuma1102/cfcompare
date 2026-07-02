@@ -226,18 +226,26 @@ For correctness checks, it has been compared with the official Python `trop`
 package on exactly comparable weighted-TWFE sample datasets, using
 `trop_control(svd = "full")`, and the results agree to numerical tolerance.
 
+The below is how the original TROP paper, the official Python/Stata packages, and `cfcompare` handle main implementation choices. 
+|  | TROP Paper | Python | Stata | R (cfcompare)  |
+|:--|:--|:--|:--|:--|
+| **Solver** | Silent | CVXPY using SCS or OSQP | FISTA (accelerated proximal gradient) | Soft-impute-style proximal gradient (base R only)|
+| **Weight anchoring** | Per-cell  | Pooled only | Per-cell by default and pooled as an option | Per-cell by default and pooled and auto (chooseing by treated-cell count) as an option |
+| **CV criterion** | LOOCV | Placebo-RMSE only | Placebo resampling and LOOCV | LOOCV by default and placebo-RMSE as an option |
+| **Outcome pre-processing** | Raw Y | Raw Y | Standardized | Raw Y by default and standardized as an option |
+| **Covariates** | Yes | No | No | Yes |
+| **Inference** | Bootstrap | None | Bootstrap | Bootstrap or jackknife (when available) |
+
 > Technical note: There are a few technical differences for this package's estimation from official packages.
 > First, `cfcompare`'s default `trop()` uses the paper's general unit/time distances, so it applies beyond simple block designs.
 > Second, finite nuclear-norm penalties are solved with a proximal-gradient
-> soft-impute routine, as opposed to FISTA or SCS, so that the implementation depends only on base R. Thus, exact digits need not perfectly match convex-solver implementations
-> outside the comparable special cases.
-> Third, penalties are chosen by leave-one-control-cell-out prediction error by default (`trop_control(cv_method = "loocv")`), in accordance with the original paper; a placebo-RMSE criterion matching the official Python packages is also available via `trop_control(cv_method = "placebo")`, which assigns placebo blocks to control units and minimises the mean squared placebo ATT. By default the LOOCV criterion is scored on a sample of control cells; set `trop_control(n_cv_cells = Inf)` to score the paper's full eq. (5) over *every* control cell (the Stata command's `cells(0)`). In both modes the `lambda_nn` grid is swept along a warm-started nuclear path (strongest penalty first, each solve initialised from the previous one, as in the official Stata command); the program is convex, so this affects speed only, never the selected penalties.
-> Fourth, this package supports both anchoring modes of per-cell (solving a separate local weighting problem for each treated cell, the paper's eq. (3)/(12)) and pooled methods (constructing one set of weights for the entire treated group; faster than per-cell). The pooled mode follows the shared convention of the official Python (`TROP_TWFE_average`) and Stata (pooled) implementations: unit distances to the *average* treated trajectory and time distances to the centre of the treated block, so `trop(..., anchor = "pooled")` and `trop_matrix()` compute the same estimator and, on trailing-block designs, the same weights as the references. The block centre uses the Stata generalisation `(min + max + 1)/2` over the treated periods, so treated blocks that do not sit at the end of the panel are anchored correctly too.
+> soft-impute routine, as opposed to FISTA or SCS, so that the implementation depends only on base R. Thus, exact digits need not perfectly match convex-solver implementations.
+> To reconcile this difference, you can fix the penalties via `lambda = list(time=, unit=, nn=)` (bypassing CV), set `svd = "full"`, and match its `anchor`.
+> Third, penalties are chosen by leave-one-control-cell-out prediction error by default; a placebo-RMSE criterion is also available via `trop_control(cv_method = "placebo")`.
+> Fourth, this package supports both anchoring modes of per-cell (solving a separate local weighting problem for each treated cell by using `trop_matrix()`) and pooled methods (constructing one set of weights for the entire treated group; faster than per-cell).
 > Fifth, this package allows to use covariates through `panel_compare`.
-> Lastly, estimation uses the raw, non-standardized outcome by default, in the same manner as the original paper, so that `lambda` values are on the outcome's natural scale. `trop(..., standardize = TRUE)` optionally standardizes the outcome internally exactly like the official Stata command (v0.2.1+) -- `(Y - mean)/sd` before fitting, with the ATT, standard error, confidence interval, per-cell effects and counterfactual mapped back to the raw scale, and the selected `lambda` reported on the standardized scale (comparable across outcomes and across implementations).
-> To reconcile these differences exactly with another official implementation, fix the penalties via
-> `lambda = list(time=, unit=, nn=)` (bypassing CV), set `svd = "full"`, and match
-> its `anchor`.
+> Lastly, estimation uses the raw, non-standardized outcome by default, so that `lambda` values are on the outcome's natural scale. `trop(standardize = TRUE)` optionally standardizes the outcome.
+
 
 ## More details
 
