@@ -8,7 +8,7 @@
 #' Refits TROP under a sequence of penalty constraints to show how the ATT moves
 #' as the estimator is stripped back towards matrix completion and
 #' difference-in-differences. This is the robustness exercise behind Table 5 of
-#' Athey, Imbens, Qu & Viviano (2025): constraining `lambda_unit` and/or
+#' Athey, Imbens, Qu & Viviano (2026): constraining `lambda_unit` and/or
 #' `lambda_time` to zero (dropping unit/time weights) and/or `lambda_nn` to
 #' infinity (dropping the low-rank regression adjustment).
 #'
@@ -43,8 +43,8 @@
 #'   `lambda_nn`, `estimate`, `std.error`, `conf.low`/`conf.high`, and `rank`.
 #'   When `rmse = TRUE` it also has `rmse` and `rmse_rel` (RMSE relative to the
 #'   full TROP).
-#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
-#'   Triply Robust Panel Estimators. arXiv:2508.21536.
+#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026).
+#'   Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.1002/jae.70061}.
 #' @seealso [trop()]; `format()` for paste-ready LaTeX/Markdown output
 #' @examples
 #' df <- sim_panel(N = 30, T = 10, n_treated = 4, t0 = 5, att = 2, seed = 1)

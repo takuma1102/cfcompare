@@ -49,9 +49,13 @@
 #' of the treated block: it takes no `anchor` argument and has no per-cell mode.
 #' It therefore computes the same pooled, block-centre estimator as the official
 #' Python package's `TROP_TWFE_average` (implemented independently), and exists as
-#' a like-for-like matrix-in cross-check against that pooled reference. For the
-#' per-cell estimator (the paper's eq. (12) / Algorithm 2), use
-#' `trop(..., anchor = "per_cell")`, which shares the data-frame core `.trop_att()`.
+#' a like-for-like matrix-in cross-check against that pooled reference.
+#' `trop(..., anchor = "pooled")` uses the same convention (unit distances to the
+#' *average* treated trajectory, time distances to the centre of the treated
+#' block), so on a trailing-block design the two agree to solver tolerance for
+#' the same penalties. For the per-cell estimator (the paper's eq. (12) /
+#' Algorithm 2), use `trop(..., anchor = "per_cell")`, which shares the
+#' data-frame core `.trop_att()`.
 #' 
 #' @param Y N x T outcome matrix.
 #' @param W N x T 0/1 treatment matrix (1 = actively treated cell).
@@ -67,8 +71,8 @@
 #'   which any treated unit is active.
 #' @param control A list of solver controls from [trop_control()].
 #' @return A single numeric ATT estimate.
-#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
-#'   \emph{Triply Robust Panel Estimators.} arXiv:2508.21536.
+#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026).
+#'   \emph{Triply Robust Panel Estimators.} Journal of Applied Econometrics. \doi{10.1002/jae.70061}.
 #' @seealso [trop()], [panel_compare()]
 #' @export
 #' @examples

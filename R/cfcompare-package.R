@@ -18,7 +18,7 @@
 #' }
 #'
 #' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026).
-#'   Triply Robust Panel Estimators. arXiv:2508.21536.
+#'   Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.1002/jae.70061}.
 #'
 #' @keywords internal
 #' @importFrom stats as.formula median na.omit qnorm rnorm sd vcov

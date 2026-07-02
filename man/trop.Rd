@@ -12,6 +12,7 @@ trop(
   time,
   covariates = NULL,
   lambda = NULL,
+  standardize = FALSE,
   anchor = c("auto", "per_cell", "pooled"),
   se = c("bootstrap", "auto", "jackknife", "none"),
   grids = NULL,
@@ -36,7 +37,18 @@ treated cells, where they enter the counterfactual). The fitted coefficients
 are returned in \verb{$phi}.}
 
 \item{lambda}{Optional named list \code{list(time=, unit=, nn=)} to fix the
-penalties and skip cross-validation.}
+penalties and skip cross-validation. When \code{standardize = TRUE}, supplied
+penalties are interpreted on the standardized-outcome scale.}
+
+\item{standardize}{Logical; if \code{TRUE}, the outcome is standardized internally
+as \code{(Y - mean(Y)) / sd(Y)} (over all observed cells) before fitting, and
+the ATT, standard error, confidence interval, per-cell effects and
+counterfactual are mapped back to the raw outcome scale. This matches the
+convention of the official Stata command (v0.2.1+); as there, the selected
+\code{lambda} values are reported on the \emph{standardized} scale, which makes them
+comparable across outcomes and across implementations. Default \code{FALSE}
+(raw outcome, the previous behaviour). The returned \code{panel$Y} is on the
+fitting (standardized) scale, with the centre/scale stored in \verb{$scaling}.}
 
 \item{anchor}{How weights are anchored to treated cells: \code{"per_cell"}
 re-solves eq. (2) with cell-specific weights for every treated cell
@@ -60,10 +72,13 @@ needs at least 2 treated units), \code{"auto"} (jackknife when there are at leas
 An object of class \code{trop}: a list with the ATT \code{estimate},
 \code{std.error}, \code{conf.low}/\code{conf.high}, the selected penalties \code{lambda},
 any covariate coefficients \code{phi}, per-cell effects, the estimated
-counterfactual matrix, weights, and the reshaped panel.
+counterfactual matrix, weights, the reshaped panel, and \code{scaling} (the
+outcome centre/scale used internally; the identity unless
+\code{standardize = TRUE}). All effect and outcome-level components are on the
+raw outcome scale; \code{panel$Y} and \code{lambda} are on the fitting scale.
 }
 \description{
-Fits the TROP estimator of Athey, Imbens, Qu & Viviano (2025) on a long
+Fits the TROP estimator of Athey, Imbens, Qu & Viviano (2026) on a long
 panel. TROP combines a low-rank-plus-two-way-fixed-effects outcome model with
 exponential-decay unit weights (upweighting controls similar to the treated)
 and time weights (upweighting periods near the treated periods). Penalties are
@@ -78,6 +93,6 @@ fit <- trop(df, "y", "w", "id", "t", se = "none",
 fit
 }
 \references{
-Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
-Triply Robust Panel Estimators. arXiv:2508.21536.
+Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026).
+Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.1002/jae.70061}.
 }

@@ -134,7 +134,7 @@ trop_sensitivity <- function(data, outcome, treatment, unit, time,
       lam[[x_pen]] <- xv
       lam[[y_pen]] <- yv
       lam[[fixed_pen]] <- fixed_val
-      cvl <- .trop_cv_Q(Y, W, lam, control, cv_cells)
+      cvl <- .trop_cv_Q(Y, W, lam, control, cv_cells)$Q
       att <- .trop_att(Y, W, lam, control, anchor, pat)$att
       rows[[k]] <- data.frame(lambda_time = lam$time, lambda_nn = lam$nn,
                               lambda_unit = lam$unit, att = att,

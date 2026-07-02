@@ -29,7 +29,9 @@ tightened automatically as \code{lambda_nn} weakens (small penalties converge
 slowly), keeping accuracy roughly constant across the penalty grid; a fixed
 tolerance otherwise under-converges at small \code{lambda_nn}. See \code{\link[=trop]{trop()}}.}
 
-\item{n_cv_cells}{Number of control cells sampled for the CV criterion.}
+\item{n_cv_cells}{Number of control cells sampled for the CV criterion. Set
+to \code{Inf} (or \code{0}) to use \emph{every} control cell, i.e. the paper's full
+eq. (5) criterion (the Stata command's \code{cells(0)}); slower but exact.}
 
 \item{cv_cycles}{Number of coordinate-descent cycles in penalty selection.}
 

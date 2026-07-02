@@ -24,9 +24,11 @@
 #' @noRd
 .oos_weight_matrix <- function(Y, excl, pseudo_units, held_periods, lam) {
   # excl: N x T 0/1, 1 = cell excluded from fitting (real treated or held out).
-  # Unit distances use only available control cells (excl == 0).
-  du <- .unit_distance_pooled(Y, excl, pseudo_units)
-  .trop_weight_matrix(du, held_periods, ncol(Y), lam)
+  # Pooled convention (as in .trop_att(anchor = "pooled") and the official
+  # Python/Stata packages): unit distances to the average pseudo-treated
+  # trajectory, time distances to the centre of the held-out block.
+  du <- .unit_distance_to_avg(Y, excl, pseudo_units)
+  .trop_weight_matrix(du, .treated_block_center(held_periods), ncol(Y), lam)
 }
 
 #' Out-of-sample RMSE across panel estimators

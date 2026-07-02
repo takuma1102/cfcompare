@@ -1,6 +1,6 @@
 Package: cfcompare
 Title: Compare DID, SDID, Matrix Completion and the Triply Robust Panel Estimator
-Version: 0.1.0.9003
+Version: 0.1.0.9004
 Authors@R:
     person("Takuma", "Iwasaki", email = "iwasakit@stanford.edu",
            role = c("aut", "cre"))

@@ -82,6 +82,10 @@ trop_placebo_test <- function(object, B = 500L,
     tryCatch(.trop_att(Yc, Wp, lam, ctrl, anchor, patp, X = Xc)$att,
              error = function(e) NA_real_)
   }, parallel = par), use.names = FALSE)
+  # panel$Y is on the fitting scale; the observed ATT is on the raw scale, so
+  # map the placebo ATTs back before comparing (identity unless the fit was
+  # standardized).
+  placebo <- (object$scaling %||% list(scale = 1))$scale * placebo
   placebo <- placebo[is.finite(placebo)]
   if (length(placebo) < 2L)
     stop("Placebo draws did not produce enough finite estimates.", call. = FALSE)

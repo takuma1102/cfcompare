@@ -47,7 +47,11 @@ counterfactual_matrix.trop <- function(object, ...) {
   ctrl <- trop_control()
   # full pooled counterfactual (covariate-adjusted when covariates were used),
   # regardless of the fit's anchor -- matches autoplot.trop() / the event study.
-  .trop_pooled_M(Y, W, lam, ctrl, pat, X = object$panel$X)
+  M <- .trop_pooled_M(Y, W, lam, ctrl, pat, X = object$panel$X)
+  # panel$Y is on the fitting scale; map back to the raw outcome scale for
+  # standardized fits (identity otherwise).
+  sc <- object$scaling %||% list(center = 0, scale = 1)
+  sc$center + sc$scale * M
 }
 
 #' @export

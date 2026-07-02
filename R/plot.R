@@ -166,15 +166,17 @@ autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
   if (anyNA(times)) times <- seq_len(Tt)
   tu <- pat$treated_units
 
-  # full pooled counterfactual for the plot (regardless of the fit's anchor)
+  # full pooled counterfactual for the plot (regardless of the fit's anchor),
+  # via the same block-centre pooled weights used by .trop_att(anchor =
+  # "pooled"), counterfactual_matrix() and the event study.
   lam <- object$lambda
-  du <- .unit_distance_pooled(Y, W, tu)
   t_anchor <- sort(unique(which(W == 1, arr.ind = TRUE)[, 2]))
-  wmat <- .trop_weight_matrix(du, t_anchor, Tt, lam)
-  M <- .trop_solve(Y, W, wmat, lam, trop_control(), X = object$panel$X)$M
+  M <- .trop_pooled_M(Y, W, lam, trop_control(), pat, X = object$panel$X)
 
-  obs <- colMeans(Y[tu, , drop = FALSE])
-  cf  <- colMeans(M[tu, , drop = FALSE])
+  # map both paths back to the raw outcome scale for standardized fits
+  sc <- object$scaling %||% list(center = 0, scale = 1)
+  obs <- sc$center + sc$scale * colMeans(Y[tu, , drop = FALSE])
+  cf  <- sc$center + sc$scale * colMeans(M[tu, , drop = FALSE])
   dat <- rbind(
     data.frame(time = times, value = obs, series = "Treated (observed)"),
     data.frame(time = times, value = cf,  series = "Estimated Y(0)"))
@@ -233,7 +235,7 @@ autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
     # scaled to the largest weight so the shape is readable; with lambda_time = 0
     # the weights are uniform and the band is flat.
     s <- seq_len(Tt)
-    dtime <- vapply(s, function(ss) min(abs(ss - t_anchor)), numeric(1))
+    dtime <- abs(s - .treated_block_center(t_anchor))
     theta <- exp(-lam$time * dtime)
     theta <- theta / max(theta)
     rng  <- range(c(obs, cf), na.rm = TRUE)

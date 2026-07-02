@@ -123,7 +123,7 @@
 #'
 #' Setting `lambda = Inf` forces `L = 0` and returns the weighted two-way
 #' fixed-effects (DID/TWFE) fit; finite `lambda` with uniform weights yields the
-#' matrix-completion (MC) estimator. See Athey, Imbens, Qu & Viviano (2025),
+#' matrix-completion (MC) estimator. See Athey, Imbens, Qu & Viviano (2026),
 #' eq. (2).
 #'
 #' When `X` is supplied (a list of N x T covariate matrices, or an N x T x K
@@ -148,9 +148,13 @@
 #'   operator norm of the two-way-demeaned outcome. This keeps the achieved
 #'   accuracy roughly constant across `lambda`; a fixed `tol` otherwise stops
 #'   prematurely at small `lambda`. `lambda = Inf` leaves `tol` unchanged.
-#' @param L_init Optional warm start for the low-rank part (the residual `R` when
-#'   covariates are present), e.g. from a previous solve on a similar problem;
-#'   speeds up convergence without changing the solution.
+#' @param state_init Optional warm-start state: a list with elements `L`,
+#'   `alpha`, `beta`, `grand` and (with covariates) `phi`, as returned by a
+#'   previous `.mcnnm_fit()` on a same-dimension problem (see
+#'   `.solver_state()`). The program is convex, so a warm start changes only
+#'   the iteration count, never the solution. Without one, the fixed effects
+#'   are initialised at the two-way means of the outcome (rather than zero),
+#'   which already removes most of the slow, low-weight-cell transient.
 #' @param svd_method Singular-value decomposition used inside the soft-impute
 #'   step: `"truncated"` (default; leading triplets via RSpectra when available
 #'   and worthwhile) or `"full"` (exact base R `svd()`).
@@ -163,7 +167,7 @@
 #' @keywords internal
 #' @noRd
 .mcnnm_fit <- function(Y, mask, w, lambda,
-                       max_iter = 2000L, tol = 1e-6, L_init = NULL,
+                       max_iter = 2000L, tol = 1e-6, state_init = NULL,
                        svd_method = c("truncated", "full"), X = NULL) {
   svd_method <- match.arg(svd_method)
   N <- nrow(Y); Tt <- ncol(Y)
@@ -174,8 +178,6 @@
   Yf[is.na(Yf)] <- 0
   ones_T <- rep(1, Tt)
   ones_N <- rep(1, N)
-  a <- numeric(N); b <- numeric(Tt); g <- 0
-  L <- if (is.null(L_init)) matrix(0, N, Tt) else L_init
   # Soft-threshold for the nuclear-norm prox. The loss is the natural
   # sum-of-squares  sum_js w_js (Y_js - a_j - b_s - L_js)^2  (paper eq. (2); no
   # 1/2 factor), matching the official Python and Stata packages. The gradient
@@ -214,6 +216,29 @@
     qrXdd <- qr(Xdd)
   }
   xphi_of <- function(phi) if (K > 0L) matrix(Xmat %*% phi, N, Tt) else 0
+
+  # ---- initial state --------------------------------------------------------
+  if (!is.null(state_init)) {
+    # full warm start (e.g. the previous point on a lambda_nn path, or the
+    # previous treated cell in the per-cell loop): carry over the fixed
+    # effects, covariate coefficients and low-rank part.
+    a <- state_init$alpha %||% numeric(N)
+    b <- state_init$beta  %||% numeric(Tt)
+    g <- state_init$grand %||% 0
+    L <- state_init$L     %||% matrix(0, N, Tt)
+    ph <- state_init$phi
+    if (K > 0L && length(ph) == K) phi <- as.numeric(ph)
+  } else {
+    # Cold start: initialise the fixed effects at the two-way means of the
+    # (NA-filled) outcome instead of zero. The gradient step shrinks each
+    # cell's error by only w_js / max(w), so low-weight cells approach the FE
+    # solution slowly; starting at the means removes most of that transient
+    # while leaving the (convex) solution unchanged.
+    g <- mean(Yf)
+    a <- rowMeans(Yf) - g
+    b <- colMeans(Yf) - g
+    L <- matrix(0, N, Tt)
+  }
 
   M <- g + outer(a, ones_T) + outer(ones_N, b) + xphi_of(phi) + L
   for (it in seq_len(max_iter)) {

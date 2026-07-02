@@ -1,5 +1,5 @@
 # Triply RObust Panel (TROP) estimator.
-# Athey, Imbens, Qu & Viviano (2025), arXiv:2508.21536.
+# Athey, Imbens, Qu & Viviano (2026), Journal of Applied Econometrics, doi:10.1002/jae.70061.
 #
 # Working model:  Y_it(0) = alpha_i + beta_t + L_it + eps_it
 # Estimation (eq. 2):
@@ -34,14 +34,46 @@
   d
 }
 
-#' Unit distances anchored to a set of treated units (pooled weighting)
+#' Unit distances anchored to the AVERAGE treated trajectory (pooled weighting)
+#'
+#' RMS distance of each unit's outcome path to the mean path of the treated
+#' units, over the non-target periods (columns in which no treated unit is
+#' active). This is the pooled unit-distance convention of the official Python
+#' package (`TROP_TWFE_average`) and of the Stata command's pooled mode
+#' (`trop_unit_weights2(..., pooled = 1)`); on a complete block design the three
+#' coincide exactly. Cells where the unit itself is treated (possible under
+#' general assignment patterns) and non-finite cells are additionally excluded,
+#' which is a no-op on block designs.
 #' @keywords internal
 #' @noRd
-.unit_distance_pooled <- function(Y, W, treated_units) {
-  ds <- vapply(treated_units, function(i) .unit_distance_to(Y, W, i, NULL),
-               numeric(nrow(Y)))
-  if (is.null(dim(ds))) ds <- matrix(ds, ncol = 1)
-  rowMeans(ds, na.rm = TRUE)
+.unit_distance_to_avg <- function(Y, W, treated_units) {
+  N <- nrow(Y); Tt <- ncol(Y)
+  tcols <- which(colSums(W[treated_units, , drop = FALSE]) > 0)
+  avg <- colMeans(Y[treated_units, , drop = FALSE], na.rm = TRUE)
+  keep <- rep(TRUE, Tt)
+  keep[tcols] <- FALSE                          # drop the target periods
+  useM <- matrix(keep, N, Tt, byrow = TRUE) & (W == 0) & is.finite(Y) &
+    matrix(is.finite(avg), N, Tt, byrow = TRUE)
+  diff2 <- (Y - matrix(avg, N, Tt, byrow = TRUE))^2
+  diff2[!useM] <- 0
+  n <- rowSums(useM); ssq <- rowSums(diff2)
+  d <- rep(NA_real_, N); pos <- n > 0
+  d[pos] <- sqrt(ssq[pos] / n[pos])
+  d
+}
+
+#' Centre (1-based, possibly half-integer) of the treated block of periods.
+#'
+#' Generalises the trailing-block centre `T - tp/2` (0-based; the official
+#' Python convention) to treated blocks anywhere in the panel, following the
+#' Stata command: centre = (min + max + 1) / 2 over the 0-based treated
+#' columns, i.e. (min + max + 1) / 2 in 1-based indexing. For a trailing block
+#' of width `tp` this equals the previous `(T - tp/2) + 1`, so results on
+#' block designs are unchanged.
+#' @keywords internal
+#' @noRd
+.treated_block_center <- function(treated_cols) {
+  (min(treated_cols) + max(treated_cols) + 1) / 2
 }
 
 #' Build the N x T weight matrix theta_s * omega_j for an anchor.
@@ -68,12 +100,18 @@
 #' Solves eq. (2) once for the supplied weights and returns the fitted matrix.
 #' @keywords internal
 #' @noRd
-.trop_solve <- function(Y, W, wmat, lam, ctrl, L_init = NULL, X = NULL) {
+.trop_solve <- function(Y, W, wmat, lam, ctrl, state_init = NULL, X = NULL) {
   mask <- (W == 0) * 1
   .mcnnm_fit(Y, mask, wmat, lam$nn,
              max_iter = ctrl$max_iter, tol = ctrl$tol,
-             L_init = L_init, svd_method = ctrl$svd %||% "truncated", X = X)
+             state_init = state_init, svd_method = ctrl$svd %||% "truncated",
+             X = X)
 }
+
+#' Extract the warm-startable state from a solver fit.
+#' @keywords internal
+#' @noRd
+.solver_state <- function(fit) fit[c("L", "alpha", "beta", "grand", "phi")]
 
 # ---- leave-one-out cross-validation (eq. 4-5) ------------------------------
 
@@ -83,9 +121,18 @@
 #' (mask it out of the loss), build weights anchored to that cell, solve eq. (2),
 #' and accumulate the squared prediction error -- a subsampled realisation of
 #' eq. (5).
+#'
+#' Returns `list(Q, warm)`. `warm` is a per-cell list of solver states
+#' (fixed effects, phi and low-rank part; see `.solver_state()`) when
+#' `keep_state = TRUE` (else `NULL`); passing it back via `warm` on the next
+#' call warm-starts each cell's solve from the previous penalty's solution.
+#' Used by the lambda_nn grid sweep in `.trop_select_lambda()` (the
+#' "warm-start nuclear path" of the official Stata command): the problem is
+#' convex, so warm starts change only the iteration count, not the solution.
 #' @keywords internal
 #' @noRd
-.trop_cv_Q <- function(Y, W, lam, ctrl, cv_cells, du_list = NULL, X = NULL) {
+.trop_cv_Q <- function(Y, W, lam, ctrl, cv_cells, du_list = NULL, X = NULL,
+                       warm = NULL, keep_state = FALSE) {
   Tt <- ncol(Y)
   one <- function(k) {
     i <- cv_cells[k, 1]; t <- cv_cells[k, 2]
@@ -95,13 +142,20 @@
     # one is supplied (see .trop_select_lambda), else compute it here.
     du <- if (is.null(du_list)) .unit_distance_to(Y, Wk, i, t) else du_list[[k]]
     wmat <- .trop_weight_matrix(du, t, Tt, lam)
-    fit <- .trop_solve(Y, Wk, wmat, lam, ctrl, X = X)
-    (Y[i, t] - fit$M[i, t])^2
+    fit <- .trop_solve(Y, Wk, wmat, lam, ctrl,
+                       state_init = if (is.null(warm)) NULL else warm[[k]],
+                       X = X)
+    err <- (Y[i, t] - fit$M[i, t])^2
+    if (keep_state) list(err = err, state = .solver_state(fit)) else err
   }
   par <- (ctrl$workers %||% 1L) > 1L
-  errs <- unlist(.par_lapply(seq_len(nrow(cv_cells)), one, parallel = par),
-                 use.names = FALSE)
-  mean(errs)
+  res <- .par_lapply(seq_len(nrow(cv_cells)), one, parallel = par)
+  if (keep_state) {
+    list(Q = mean(vapply(res, function(r) r$err, numeric(1))),
+         warm = lapply(res, function(r) r$state))
+  } else {
+    list(Q = mean(unlist(res, use.names = FALSE)), warm = NULL)
+  }
 }
 
 # ---- placebo-RMSE cross-validation (option; Python/Stata-style) -------------
@@ -135,7 +189,8 @@
     tr <- sample.int(nrow(Yp), n_tr)
     Wp <- matrix(0, nrow(Yp), ncol(Yp))
     Wp[tr, post_cols] <- 1
-    list(Wp = Wp, du = .unit_distance_pooled(Yp, Wp, tr), post_cols = post_cols)
+    list(Wp = Wp, du = .unit_distance_to_avg(Yp, Wp, tr),
+         post_cols = post_cols)
   })
   list(Yp = Yp, ctrl_units = ctrl_units, draws = draws)
 }
@@ -147,22 +202,33 @@
 #' package. The true placebo effect is zero, so smaller is better. Penalty
 #' selection therefore uses the pooled ATT even when the final fit uses
 #' `anchor = "per_cell"`.
+#'
+#' Returns `list(Q, warm)` like `.trop_cv_Q()`; `warm` holds one fitted
+#' solver state per placebo draw when `keep_state = TRUE`, enabling the
+#' warm-start nuclear path in `.trop_select_lambda()`.
 #' @keywords internal
 #' @noRd
-.trop_cv_Q_placebo <- function(pb, lam, ctrl, X = NULL) {
+.trop_cv_Q_placebo <- function(pb, lam, ctrl, X = NULL,
+                               warm = NULL, keep_state = FALSE) {
   Yp <- pb$Yp; Tt <- ncol(Yp)
   one <- function(k) {
     d <- pb$draws[[k]]
-    tp_pool  <- length(unique(d$post_cols))
-    t_center <- (Tt - tp_pool / 2) + 1
+    t_center <- .treated_block_center(unique(d$post_cols))
     wmat <- .trop_weight_matrix(d$du, t_center, Tt, lam)
-    fit  <- .trop_solve(Yp, d$Wp, wmat, lam, ctrl, X = X)
-    mean((Yp - fit$M)[d$Wp == 1])^2
+    fit  <- .trop_solve(Yp, d$Wp, wmat, lam, ctrl,
+                        state_init = if (is.null(warm)) NULL else warm[[k]],
+                        X = X)
+    err <- mean((Yp - fit$M)[d$Wp == 1])^2
+    if (keep_state) list(err = err, state = .solver_state(fit)) else err
   }
   par <- (ctrl$workers %||% 1L) > 1L
-  errs <- unlist(.par_lapply(seq_along(pb$draws), one, parallel = par),
-                 use.names = FALSE)
-  mean(errs)
+  res <- .par_lapply(seq_along(pb$draws), one, parallel = par)
+  if (keep_state) {
+    list(Q = mean(vapply(res, function(r) r$err, numeric(1))),
+         warm = lapply(res, function(r) r$state))
+  } else {
+    list(Q = mean(unlist(res, use.names = FALSE)), warm = NULL)
+  }
 }
 
 #' Coordinate-descent search over (lambda_time, lambda_unit, lambda_nn).
@@ -184,7 +250,8 @@
     Xp <- if (is.null(X)) NULL else
       lapply(.as_cov_list(X, nrow(Y), ncol(Y)),
              function(M) M[pb$ctrl_units, , drop = FALSE])
-    eval_one <- function(lam) .trop_cv_Q_placebo(pb, lam, ctrl, X = Xp)
+    eval_one <- function(lam, warm = NULL, keep_state = FALSE)
+      .trop_cv_Q_placebo(pb, lam, ctrl, X = Xp, warm = warm, keep_state = keep_state)
   } else {
     # Default: leave-one-control-cell-out prediction error (eq. (4)-(5)). Unit
     # distances for each held-out CV cell do not depend on the penalties, so
@@ -195,15 +262,29 @@
       Wk <- W; Wk[i, t] <- 1
       .unit_distance_to(Y, Wk, i, t)
     })
-    eval_one <- function(lam) .trop_cv_Q(Y, W, lam, ctrl, cv_cells,
-                                         du_list = du_cache, X = X)
+    eval_one <- function(lam, warm = NULL, keep_state = FALSE)
+      .trop_cv_Q(Y, W, lam, ctrl, cv_cells, du_list = du_cache, X = X,
+                 warm = warm, keep_state = keep_state)
   }
 
   pick <- function(lam, which, grid) {
-    qs <- vapply(grid, function(v) {
-      l2 <- lam; l2[[which]] <- v
-      eval_one(l2)
-    }, numeric(1))
+    # Warm-start nuclear path (as in the official Stata command): sweep the
+    # lambda_nn grid from the strongest penalty (Inf, where L = 0) down to the
+    # weakest, initialising each held-out solve with the full solver state
+    # (fixed effects, phi and low-rank part) fitted at the previous, larger
+    # penalty. The problem in eq. (2) is convex, so this changes only the
+    # iteration count, never the selected value. The time/unit sweeps solve
+    # from a cold start as before.
+    is_nn <- identical(which, "nn")
+    if (is_nn) grid <- sort(grid, decreasing = TRUE)   # Inf first
+    warm <- NULL
+    qs <- numeric(length(grid))
+    for (gi in seq_along(grid)) {
+      l2 <- lam; l2[[which]] <- grid[gi]
+      ev <- eval_one(l2, warm = if (is_nn) warm else NULL, keep_state = is_nn)
+      qs[gi] <- ev$Q
+      if (is_nn) warm <- ev$warm
+    }
     best <- grid[which.min(qs)]
     if (verbose) {
       message(sprintf("  %-4s -> %.4g (Q=%.5g)", which, best, min(qs)))
@@ -216,13 +297,16 @@
   lam$nn   <- pick(lam, "nn",   grids$nn)
   lam$unit <- pick(lam, "unit", grids$unit)
 
-  # cycles
+  # cycles; stop early once the selected triplet stops changing (the official
+  # Python coordinate-descent iterates to a fixed point the same way).
   for (cyc in seq_len(ctrl$cv_cycles)) {
+    prev <- lam[c("time", "unit", "nn")]
     lam$time <- pick(lam, "time", grids$time)
     lam$unit <- pick(lam, "unit", grids$unit)
     lam$nn   <- pick(lam, "nn",   grids$nn)
+    if (identical(prev, lam[c("time", "unit", "nn")])) break
   }
-  lam$Q <- eval_one(lam)
+  lam$Q <- eval_one(lam)$Q
   lam
 }
 
@@ -276,7 +360,7 @@
 
 #' Triply RObust Panel (TROP) estimator
 #'
-#' Fits the TROP estimator of Athey, Imbens, Qu & Viviano (2025) on a long
+#' Fits the TROP estimator of Athey, Imbens, Qu & Viviano (2026) on a long
 #' panel. TROP combines a low-rank-plus-two-way-fixed-effects outcome model with
 #' exponential-decay unit weights (upweighting controls similar to the treated)
 #' and time weights (upweighting periods near the treated periods). Penalties are
@@ -297,7 +381,17 @@
 #'   treated cells, where they enter the counterfactual). The fitted coefficients
 #'   are returned in `$phi`.
 #' @param lambda Optional named list `list(time=, unit=, nn=)` to fix the
-#'   penalties and skip cross-validation.
+#'   penalties and skip cross-validation. When `standardize = TRUE`, supplied
+#'   penalties are interpreted on the standardized-outcome scale.
+#' @param standardize Logical; if `TRUE`, the outcome is standardized internally
+#'   as `(Y - mean(Y)) / sd(Y)` (over all observed cells) before fitting, and
+#'   the ATT, standard error, confidence interval, per-cell effects and
+#'   counterfactual are mapped back to the raw outcome scale. This matches the
+#'   convention of the official Stata command (v0.2.1+); as there, the selected
+#'   `lambda` values are reported on the *standardized* scale, which makes them
+#'   comparable across outcomes and across implementations. Default `FALSE`
+#'   (raw outcome, the previous behaviour). The returned `panel$Y` is on the
+#'   fitting (standardized) scale, with the centre/scale stored in `$scaling`.
 #' @param anchor How weights are anchored to treated cells: `"per_cell"`
 #'   re-solves eq. (2) with cell-specific weights for every treated cell
 #'   (faithful to the paper); `"pooled"` solves once with weights anchored to the
@@ -314,9 +408,12 @@
 #' @return An object of class `trop`: a list with the ATT `estimate`,
 #'   `std.error`, `conf.low`/`conf.high`, the selected penalties `lambda`,
 #'   any covariate coefficients `phi`, per-cell effects, the estimated
-#'   counterfactual matrix, weights, and the reshaped panel.
-#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
-#'   Triply Robust Panel Estimators. arXiv:2508.21536.
+#'   counterfactual matrix, weights, the reshaped panel, and `scaling` (the
+#'   outcome centre/scale used internally; the identity unless
+#'   `standardize = TRUE`). All effect and outcome-level components are on the
+#'   raw outcome scale; `panel$Y` and `lambda` are on the fitting scale.
+#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026).
+#'   Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.1002/jae.70061}.
 #' @examples
 #' df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, seed = 1)
 #' fit <- trop(df, "y", "w", "id", "t", se = "none",
@@ -326,6 +423,7 @@
 trop <- function(data, outcome, treatment, unit, time,
                  covariates = NULL,
                  lambda = NULL,
+                 standardize = FALSE,
                  anchor = c("auto", "per_cell", "pooled"),
                  se = c("bootstrap", "auto", "jackknife", "none"),
                  grids = NULL,
@@ -334,6 +432,10 @@ trop <- function(data, outcome, treatment, unit, time,
   anchor <- match.arg(anchor)
   se <- match.arg(se)
   m <- .panel_to_matrices(data, outcome, treatment, unit, time)
+  # Optional outcome standardization (Stata convention): fit on
+  # (Y - mean) / sd and map the results back to the raw scale below.
+  sc <- .trop_scaling(m$Y, standardize)
+  m$Y <- (m$Y - sc$center) / sc$scale
   Y <- m$Y; W <- m$W
   pat <- .assignment_pattern(W)
   X <- .covariate_matrices(data, covariates, unit, time, m$units, m$times)
@@ -349,18 +451,63 @@ trop <- function(data, outcome, treatment, unit, time,
                       control$conf_level, verbose, X = X)
   if (length(eng$phi)) eng$phi <- stats::setNames(eng$phi, covariates)
   m$X <- X
+  eng <- .trop_unscale_engine(eng, sc)
 
   structure(
     c(eng, list(
       conf.level = control$conf_level,
       pattern = pat,
       panel = m,
+      scaling = sc,
       outcome = outcome,
       covariates = covariates,
       call = match.call()
     )),
     class = "trop"
   )
+}
+
+#' Outcome scaling used by [trop()] (`standardize` option).
+#'
+#' Grand mean / SD over all observed (finite) outcome cells, as in the official
+#' Stata command's `trop_standardize_outcome()`. A degenerate SD (zero, or not
+#' finite) falls back to the identity transform.
+#' @keywords internal
+#' @noRd
+.trop_scaling <- function(Y, standardize) {
+  if (!isTRUE(standardize)) return(list(center = 0, scale = 1))
+  v <- Y[is.finite(Y)]
+  ctr <- mean(v)
+  s <- stats::sd(v)
+  if (!is.finite(ctr)) ctr <- 0
+  if (!is.finite(s) || s <= 0) s <- 1
+  list(center = ctr, scale = s)
+}
+
+#' Map a standardized-scale engine result back to the raw outcome scale.
+#'
+#' Effects (ATT, SE, CI half-widths, per-cell tau, covariate coefficients) scale
+#' by `s`; levels (observed / counterfactual outcomes) map through
+#' `center + s * y`. The selected penalties are left on the fitting
+#' (standardized) scale, as in the Stata command.
+#' @keywords internal
+#' @noRd
+.trop_unscale_engine <- function(eng, sc) {
+  s <- sc$scale; ctr <- sc$center
+  if (identical(s, 1) && identical(ctr, 0)) return(eng)
+  eng$estimate  <- s * eng$estimate
+  eng$std.error <- s * eng$std.error
+  eng$conf.low  <- s * eng$conf.low
+  eng$conf.high <- s * eng$conf.high
+  if (!is.null(eng$tau_cells)) {
+    eng$tau_cells$y      <- ctr + s * eng$tau_cells$y
+    eng$tau_cells$y0_hat <- ctr + s * eng$tau_cells$y0_hat
+    eng$tau_cells$tau    <- s * eng$tau_cells$tau
+  }
+  if (!is.null(eng$counterfactual))
+    eng$counterfactual <- ctr + s * eng$counterfactual
+  if (length(eng$phi)) eng$phi <- s * eng$phi
+  eng
 }
 
 #' Shared TROP engine operating directly on Y / W matrices.
@@ -410,6 +557,9 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @noRd
 .sample_control_cells <- function(W, n, seed = NULL) {
   ctrl_idx <- which(W == 0, arr.ind = TRUE)
+  # n = Inf or n <= 0 means "all control cells": the paper's full eq. (5)
+  # criterion, matching the Stata command's cells(0).
+  if (!is.finite(n) || n <= 0) return(ctrl_idx)
   if (nrow(ctrl_idx) > n) {
     if (!is.null(seed)) {
       old <- .Random.seed_safe()
@@ -445,15 +595,19 @@ trop <- function(data, outcome, treatment, unit, time,
   phi <- numeric(0)
 
   if (anchor == "pooled") {
-    du <- .unit_distance_pooled(Y, W, pat$treated_units)
+    # Pooled weights: RMS distance to the AVERAGE treated trajectory, matching
+    # the matrix-in trop_matrix()/.trop_reference_weights, the official Python
+    # TROP_TWFE_average and the Stata pooled mode. (Averaging per-treated-unit
+    # distances instead is not the reference convention.)
+    du <- .unit_distance_to_avg(Y, W, pat$treated_units)
     # Anchor the time weights to the CENTRE of the treated block, matching the
-    # matrix-in trop_matrix()/.trop_reference_weights and the official Python
-    # TROP_TWFE_average (dist_time = |s - (T - tp/2)|). Passing the vector of
-    # treated periods to .trop_weight_matrix() would instead use the distance to
-    # the nearest treated period, which flattens theta across the block and does
-    # not match the reference.
-    tp_pool  <- length(unique(treated_cells[, 2]))
-    t_center <- (Tt - tp_pool / 2) + 1        # 1-based centre (s runs 1..Tt)
+    # references (for a trailing block, dist_time = |s - (T - tp/2)| 0-based).
+    # .treated_block_center() generalises this to treated blocks anywhere in
+    # the panel (Stata convention). Passing the vector of treated periods to
+    # .trop_weight_matrix() would instead use the distance to the nearest
+    # treated period, which flattens theta across the block and does not match
+    # the reference.
+    t_center <- .treated_block_center(unique(treated_cells[, 2]))
     wmat <- .trop_weight_matrix(du, t_center, Tt, lam)
     fit <- .trop_solve(Y, W, wmat, lam, ctrl, X = X)
     Mhat <- fit$M
@@ -462,16 +616,16 @@ trop <- function(data, outcome, treatment, unit, time,
   } else {
     ranks <- integer(nrow(treated_cells))
     phis <- vector("list", nrow(treated_cells))
-    L_prev <- NULL                      # warm start: reuse the previous cell's L
+    st_prev <- NULL       # warm start: reuse the previous cell's full state
     for (k in seq_len(nrow(treated_cells))) {
       i <- treated_cells[k, 1]; t <- treated_cells[k, 2]
       du <- .unit_distance_to(Y, W, i, t)
       wmat <- .trop_weight_matrix(du, t, Tt, lam)
-      fit <- .trop_solve(Y, W, wmat, lam, ctrl, L_init = L_prev, X = X)
+      fit <- .trop_solve(Y, W, wmat, lam, ctrl, state_init = st_prev, X = X)
       Mhat[i, t] <- fit$M[i, t]
       ranks[k] <- fit$rank
       phis[[k]] <- fit$phi
-      L_prev <- fit$L                   # consecutive cells share dimensions
+      st_prev <- .solver_state(fit)     # consecutive cells share dimensions
     }
     rnk <- round(mean(ranks))
     # per-cell anchor re-solves once per treated cell; report the average
@@ -483,9 +637,11 @@ trop <- function(data, outcome, treatment, unit, time,
   }
 
   tau <- Y[treated_cells] - Mhat[treated_cells]
+  rn <- rownames(Y) %||% as.character(seq_len(N))
+  cn <- colnames(Y) %||% as.character(seq_len(Tt))
   tau_cells <- data.frame(
-    unit = rownames(Y)[treated_cells[, 1]],
-    time = colnames(Y)[treated_cells[, 2]],
+    unit = rn[treated_cells[, 1]],
+    time = cn[treated_cells[, 2]],
     y = Y[treated_cells],
     y0_hat = Mhat[treated_cells],
     tau = tau,
@@ -580,7 +736,9 @@ trop <- function(data, outcome, treatment, unit, time,
 #'   tightened automatically as `lambda_nn` weakens (small penalties converge
 #'   slowly), keeping accuracy roughly constant across the penalty grid; a fixed
 #'   tolerance otherwise under-converges at small `lambda_nn`. See [trop()].
-#' @param n_cv_cells Number of control cells sampled for the CV criterion.
+#' @param n_cv_cells Number of control cells sampled for the CV criterion. Set
+#'   to `Inf` (or `0`) to use *every* control cell, i.e. the paper's full
+#'   eq. (5) criterion (the Stata command's `cells(0)`); slower but exact.
 #' @param cv_cycles Number of coordinate-descent cycles in penalty selection.
 #' @param cv_method Penalty cross-validation criterion. `"loocv"` (default)
 #'   scores held-out control-cell prediction error (the paper's eq. (4)-(5));
@@ -640,10 +798,16 @@ print.trop <- function(x, ...) {
     cat(sprintf("  %.0f%% CI: [%.4f, %.4f]\n",
                 100 * x$conf.level, x$conf.low, x$conf.high))
   } else cat("\n")
-  cat(sprintf("  penalties: lambda_time=%.3g, lambda_unit=%.3g, lambda_nn=%s\n",
+  std <- !is.null(x$scaling) && (x$scaling$scale != 1 || x$scaling$center != 0)
+  cat(sprintf("  penalties%s: lambda_time=%.3g, lambda_unit=%.3g, lambda_nn=%s\n",
+              if (std) " (standardized-outcome scale)" else "",
               x$lambda$time, x$lambda$unit,
               ifelse(is.infinite(x$lambda$nn), "Inf",
                      sprintf("%.3g", x$lambda$nn))))
+  if (std) {
+    cat(sprintf("  outcome standardized internally (mean %.4g, sd %.4g); ATT/SE/CI on the raw scale\n",
+                x$scaling$center, x$scaling$scale))
+  }
   cat(sprintf("  estimated rank(L)=%s, anchor=%s, design=%s\n",
               x$rank, x$anchor, x$pattern$type))
   cat(sprintf("  treated cells=%d across %d unit(s)\n",
@@ -669,12 +833,11 @@ print.trop <- function(x, ...) {
 #' @noRd
 .trop_pooled_M <- function(Y, W, lam, ctrl, pat, X = NULL) {
   tu <- pat$treated_units
-  du <- .unit_distance_pooled(Y, W, tu)
+  du <- .unit_distance_to_avg(Y, W, tu)
   # Block-centre time anchoring, consistent with .trop_att(anchor = "pooled"),
   # trop_matrix() and the official Python TROP_TWFE_average.
   tcells   <- which(W == 1, arr.ind = TRUE)
-  tp_pool  <- length(unique(tcells[, 2]))
-  t_center <- (ncol(Y) - tp_pool / 2) + 1
+  t_center <- .treated_block_center(unique(tcells[, 2]))
   wmat <- .trop_weight_matrix(du, t_center, ncol(Y), lam)
   .trop_solve(Y, W, wmat, lam, ctrl, X = X)$M
 }
@@ -833,8 +996,8 @@ print.trop <- function(x, ...) {
 #'   `data.frame` with one row per event time (`event_time`, `estimate`,
 #'   `std.error`, `conf.low`, `conf.high`, `n_cells`, `period`), plus the overall
 #'   `att`, the `se.method`, and metadata.
-#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
-#'   Triply Robust Panel Estimators. arXiv:2508.21536.
+#' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026).
+#'   Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.1002/jae.70061}.
 #' @seealso [autoplot.trop_event_study()] to plot the result.
 #' @examples
 #' \donttest{
@@ -857,6 +1020,9 @@ trop_event_study <- function(object,
   Y <- object$panel$Y; W <- object$panel$W
   pat <- object$pattern; lam <- object$lambda
   X <- object$panel$X
+  # panel$Y (and lam) live on the fitting scale; effects computed below are
+  # mapped back to the raw outcome scale via the fit's stored scaling.
+  s_out <- (object$scaling %||% list(scale = 1))$scale
   if (pat$n_treated_units < 1) stop("No treated units.", call. = FALSE)
 
   .with_workers(control$workers %||% 1L, {
@@ -871,10 +1037,10 @@ trop_event_study <- function(object,
                           pre_periods, X = X)
     res <- data.frame(
       event_time = evt,
-      estimate   = as.numeric(point),
-      std.error  = as.numeric(inf$se[as.character(evt)]),
-      conf.low   = as.numeric(inf$conf.low[as.character(evt)]),
-      conf.high  = as.numeric(inf$conf.high[as.character(evt)]),
+      estimate   = s_out * as.numeric(point),
+      std.error  = s_out * as.numeric(inf$se[as.character(evt)]),
+      conf.low   = s_out * as.numeric(inf$conf.low[as.character(evt)]),
+      conf.high  = s_out * as.numeric(inf$conf.high[as.character(evt)]),
       n_cells    = as.integer(pe$n[as.character(evt)]),
       period     = ifelse(evt < 0L, "pre", "post"),
       stringsAsFactors = FALSE)

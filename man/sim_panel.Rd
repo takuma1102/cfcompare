@@ -69,7 +69,7 @@ coefficients are stored on \code{attr(., "phi")}.
 Generates a long panel whose untreated potential outcomes follow an
 interactive-fixed-effects (factor) model on top of two-way fixed effects,
 in the spirit of the data-generating processes in Athey, Imbens, Qu &
-Viviano (2025). A block treatment is applied to \code{n_treated} units from period
+Viviano (2026). A block treatment is applied to \code{n_treated} units from period
 \code{t0} onward, with a constant additive effect \code{att}.
 }
 \examples{

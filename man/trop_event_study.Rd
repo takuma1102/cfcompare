@@ -61,8 +61,8 @@ es
 }
 }
 \references{
-Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2025).
-Triply Robust Panel Estimators. arXiv:2508.21536.
+Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026).
+Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.1002/jae.70061}.
 }
 \seealso{
 \code{\link[=autoplot.trop_event_study]{autoplot.trop_event_study()}} to plot the result.
