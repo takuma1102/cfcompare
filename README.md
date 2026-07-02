@@ -63,7 +63,8 @@ cmp <- panel_compare(
   # covariates = c("x1", "x2"),
   anchor  = "pooled",  # faster method
   # or "per-cell" (more accurate; in accordance with the original paper)
-  # or "auto" (choosing "per-cell" or "pooled" depending on the number of treated cells) 
+  # or "auto" (choosing "per-cell" or "pooled" depending on the number of treated cells)
+  # workers = n_parallel  # for faster execution 
 )
 
 cmp$att                    # tidy ATT table, one row per method
