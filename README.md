@@ -219,7 +219,7 @@ Native estimators support `se = "bootstrap"`, `"jackknife"`, and
 `"none"` where applicable. These are practical resampling choices for the R
 workflow; use the TROP paper for formal inference conditions.
 
-## Numerical agreement with and differences from the official packages
+## Numerical agreement with, and technical differences from the official packages
 
 The TROP engine in this package is written in base R.
 For correctness checks, it has been compared with the official Python `trop`
