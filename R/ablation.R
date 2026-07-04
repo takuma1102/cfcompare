@@ -365,16 +365,16 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
 #' @keywords internal
 #' @noRd
 .abl_layout <- function(nb) {
-  c_title <- 0.16
-  c_sub   <- c_title + 0.30
-  y_top   <- c_sub + 0.26
-  c_head  <- y_top + 0.26
-  y_mid   <- c_head + 0.20
-  ROW     <- 0.32
-  c_rows  <- (y_mid + 0.26) + (seq_len(nb) - 1L) * ROW
-  y_bot   <- c_rows[nb] + 0.24
+  c_title <- 0.13
+  c_sub   <- c_title + 0.24
+  y_top   <- c_sub   + 0.18
+  c_head  <- y_top   + 0.15
+  y_mid   <- c_head  + 0.15
+  ROW     <- 0.21                        # single-line row pitch (normal table)
+  c_rows  <- (y_mid + 0.16) + (seq_len(nb) - 1L) * ROW
+  y_bot   <- c_rows[nb] + 0.13
   list(c_title = c_title, c_sub = c_sub, y_top = y_top, c_head = c_head,
-       y_mid = y_mid, c_rows = c_rows, y_bot = y_bot, content_h = y_bot + 0.08)
+       y_mid = y_mid, c_rows = c_rows, y_bot = y_bot, content_h = y_bot + 0.07)
 }
 
 # Pure-grid renderer (no gridExtra/gt/Chrome, so it works headless). Booktabs
@@ -458,7 +458,7 @@ format.trop_ablation <- function(x, output = c("latex", "markdown"),
     max(nchar(fc$vnames[j]), max(nchar(fc$vcols[[j]]), 1L)) + 3L, integer(1)))
   tot_chars <- label_chars + 3L + val_chars
   if (is.null(width))  width  <- max(6.5, 0.092 * tot_chars + 1)
-  if (is.null(height)) height <- .abl_layout(nb)$content_h + 0.32
+  if (is.null(height)) height <- .abl_layout(nb)$content_h + 0.22
 
   if (!is.null(file)) {
     ext <- tolower(tools::file_ext(file))
