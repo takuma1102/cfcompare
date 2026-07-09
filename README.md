@@ -232,7 +232,7 @@ The below is how the original TROP paper, the official Python/Stata packages, an
 |:--|:--|:--|:--|:--|
 | **Solver** | Silent | CVXPY using SCS or OSQP | FISTA (accelerated proximal gradient) | Soft-impute-style proximal gradient (base R only)|
 | **Weight anchoring** | Per-cell  | Pooled only | Pooled (default) and per-cell (option) | Per-cell (default) and pooled and auto (chooseing by treated-cell count) as options |
-| **CV criterion** | LOOCV | Placebo-RMSE only | Placebo resampling (default) and k-fold (option) for pooled; LOOCV for per-cell | LOOCV (default) and placebo-RMSE (option) |
+| **CV criterion** | LOOCV | Placebo-RMSE only | Placebo resampling (default) and k-fold (option) for pooled; only LOOCV for per-cell | LOOCV (default) and placebo-RMSE (option) |
 | **Outcome pre-processing** | Raw Y | Raw Y | Standardized (default) and raw Y (option) | Raw Y (default) and standardized (option) |
 | **Covariates** | Yes | No | No | Yes |
 | **Inference** | Bootstrap | None | Bootstrap | Bootstrap or jackknife (when available) |
