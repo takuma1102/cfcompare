@@ -54,11 +54,17 @@ large panels, \code{"full"} is used for exact numerical-agreement checks.}
 
 \item{cv_method}{Penalty cross-validation criterion. \code{"loocv"} (default)
 scores held-out control-cell prediction error (the paper's eq. (4)-(5));
-\code{"placebo"} instead assigns placebo blocks to control units and minimises
-the mean squared placebo ATT (the placebo-RMSE criterion used by the
-official Python/Stata packages). Ignored when the penalties are supplied via
-\code{lambda} (CV is then skipped). The placebo criterion always uses the pooled
-(block-centre) ATT, even when the final fit uses \code{anchor = "per_cell"}.}
+\code{"placebo"} instead stamps the \emph{actual} treated-unit adoption patterns
+onto randomly resampled control units and minimises the mean squared
+placebo ATT (the placebo-RMSE / pattern-resampling criterion of the
+official Python and Stata packages). Under block adoption the two placebo
+variants coincide; under staggered adoption each placebo draw reproduces
+the real cohort structure, so \code{"placebo"} is the recommended choice there
+(a warning is emitted if \code{"loocv"} is used on a staggered design).
+Ignored when the penalties are supplied via \code{lambda} (CV is then
+skipped). The placebo criterion always uses the pooled (per-cohort
+block-centre, cell-weighted) ATT, even when the final fit uses
+\code{anchor = "per_cell"}.}
 
 \item{n_placebo}{Number of placebo assignments drawn when
 \code{cv_method = "placebo"} (larger is more stable but slower).}

@@ -163,17 +163,28 @@
 #' Placebo draws for placebo-RMSE penalty selection.
 #'
 #' Restricts the panel to control units (drops the real treated rows), then
-#' draws `ctrl$n_placebo` placebo assignments; each treats as many randomly
-#' chosen control units as the real design, over the same post-block. Unit
-#' distances are precomputed per draw (they do not depend on the penalties), so
-#' the coordinate-descent search reuses them across every penalty evaluation.
+#' draws `ctrl$n_placebo` placebo assignments. Each draw stamps the *actual*
+#' treated-unit adoption patterns (the rows of `W` for the real treated units)
+#' onto randomly chosen control units, one pattern per sampled unit -- the
+#' pattern-bank scheme of the official Stata command (v0.2.4,
+#' `trop_placebo_rmse_path()` / `__trop_Pat`). Under block adoption every
+#' pattern is the same trailing block, so this reduces exactly to the previous
+#' common-post-block behaviour; under staggered adoption each placebo draw
+#' reproduces the real cohort structure (who adopts when).
+#'
+#' Placebo units are grouped into adoption cohorts (identical W rows). For each
+#' cohort the draw caches its units, treated columns, block centre and unit
+#' distances (none of which depend on the penalties), so the coordinate-descent
+#' search reuses them across every penalty evaluation.
 #' @keywords internal
 #' @noRd
 .trop_placebo_setup <- function(Y, W, pat, ctrl) {
   ctrl_units <- setdiff(seq_len(nrow(Y)), pat$treated_units)
   Yp <- Y[ctrl_units, , drop = FALSE]
-  post_cols <- which(colSums(W[pat$treated_units, , drop = FALSE]) > 0)
-  n_tr <- length(pat$treated_units)
+  # Pattern bank: one adoption pattern per real treated unit.
+  Pat <- W[pat$treated_units, , drop = FALSE]
+  post_cols <- which(colSums(Pat) > 0)
+  n_tr <- nrow(Pat)
   n_pl <- ctrl$n_placebo %||% 30L
   if (length(ctrl_units) <= n_tr || length(post_cols) == 0L ||
       length(post_cols) >= ncol(Yp)) {
@@ -185,27 +196,45 @@
     on.exit(.Random.seed_restore(old), add = TRUE)
     set.seed(ctrl$seed)
   }
+  # Cohorts of the pattern bank: rows of Pat that are identical adopt together.
+  pat_key <- apply(Pat, 1L, paste, collapse = "")
+  cohorts <- split(seq_len(n_tr), pat_key)
   draws <- lapply(seq_len(n_pl), function(b) {
     tr <- sample.int(nrow(Yp), n_tr)
     Wp <- matrix(0, nrow(Yp), ncol(Yp))
-    Wp[tr, post_cols] <- 1
-    list(Wp = Wp, du = .unit_distance_to_avg(Yp, Wp, tr),
-         post_cols = post_cols)
+    Wp[tr, ] <- Pat                       # stamp one real pattern per unit
+    groups <- lapply(cohorts, function(idx) {
+      us   <- tr[idx]
+      cols <- which(Pat[idx[1L], ] == 1)
+      list(us = us, cols = cols,
+           size     = length(us) * length(cols),
+           t_center = .treated_block_center(cols),
+           du       = .unit_distance_to_avg(Yp, Wp, us))
+    })
+    names(groups) <- NULL
+    list(Wp = Wp, groups = groups, post_cols = post_cols)
   })
   list(Yp = Yp, ctrl_units = ctrl_units, draws = draws)
 }
 
 #' Placebo-RMSE criterion: mean squared placebo ATT across the draws.
 #'
-#' Each placebo ATT is the pooled (block-centre) estimate on the control panel,
-#' matching the `TROP_TWFE_average` placebo tuning of the official Python
-#' package. The true placebo effect is zero, so smaller is better. Penalty
-#' selection therefore uses the pooled ATT even when the final fit uses
-#' `anchor = "per_cell"`.
+#' Each placebo ATT is a pooled estimate on the control panel: within each
+#' adoption cohort of the draw the weights are anchored to that cohort's
+#' treated units and block centre, the cohort placebo ATT is the mean gap over
+#' its placebo cells, and cohorts are combined cell-weighted -- mirroring the
+#' per-spell, cell-weighted scoring of the official Stata command
+#' (`trop_placebo_rmse_path()`), which "rehearses" the pooled estimand under
+#' the real adoption pattern. With a single cohort (block adoption) this
+#' collapses to the previous single-anchor pooled ATT, matching the
+#' `TROP_TWFE_average` placebo tuning of the official Python package. The true
+#' placebo effect is zero, so smaller is better. Penalty selection therefore
+#' uses the pooled ATT even when the final fit uses `anchor = "per_cell"`.
 #'
-#' Returns `list(Q, warm)` like `.trop_cv_Q()`; `warm` holds one fitted
-#' solver state per placebo draw when `keep_state = TRUE`, enabling the
-#' warm-start nuclear path in `.trop_select_lambda()`.
+#' Returns `list(Q, warm)` like `.trop_cv_Q()`; `warm` holds, per placebo
+#' draw, a list of fitted solver states (one per cohort) when
+#' `keep_state = TRUE`, enabling the warm-start nuclear path in
+#' `.trop_select_lambda()`.
 #' @keywords internal
 #' @noRd
 .trop_cv_Q_placebo <- function(pb, lam, ctrl, X = NULL,
@@ -213,13 +242,25 @@
   Yp <- pb$Yp; Tt <- ncol(Yp)
   one <- function(k) {
     d <- pb$draws[[k]]
-    t_center <- .treated_block_center(unique(d$post_cols))
-    wmat <- .trop_weight_matrix(d$du, t_center, Tt, lam)
-    fit  <- .trop_solve(Yp, d$Wp, wmat, lam, ctrl,
-                        state_init = if (is.null(warm)) NULL else warm[[k]],
-                        X = X)
-    err <- mean((Yp - fit$M)[d$Wp == 1])^2
-    if (keep_state) list(err = err, state = .solver_state(fit)) else err
+    ng <- length(d$groups)
+    states <- if (keep_state) vector("list", ng) else NULL
+    att <- 0; wsum <- 0
+    for (g in seq_len(ng)) {
+      gr <- d$groups[[g]]
+      wmat <- .trop_weight_matrix(gr$du, gr$t_center, Tt, lam)
+      fit  <- .trop_solve(Yp, d$Wp, wmat, lam, ctrl,
+                          state_init = if (is.null(warm)) NULL
+                                       else warm[[k]][[g]],
+                          X = X)
+      cells <- matrix(FALSE, nrow(Yp), Tt)
+      cells[gr$us, gr$cols] <- TRUE       # this cohort's placebo cells
+      tau_g <- mean((Yp - fit$M)[cells])
+      att   <- att + gr$size * tau_g
+      wsum  <- wsum + gr$size
+      if (keep_state) states[[g]] <- .solver_state(fit)
+    }
+    err <- (att / wsum)^2
+    if (keep_state) list(err = err, state = states) else err
   }
   par <- (ctrl$workers %||% 1L) > 1L
   res <- .par_lapply(seq_along(pb$draws), one, parallel = par)
@@ -257,6 +298,21 @@
     # distances for each held-out CV cell do not depend on the penalties, so
     # compute them once and reuse across the whole penalty search (big saving:
     # the search evaluates the CV criterion dozens of times).
+    #
+    # Under staggered / general adoption, holding out one control cell at a
+    # time cannot mimic the real missingness pattern (whole post-periods
+    # missing per adoption cohort), which is the known failure mode of LOOCV
+    # in those designs (cf. the official Stata command, which restricts
+    # cv(loocv) to per-cell mode and defaults to pattern-resampled placebo CV
+    # for the pooled estimand). LOOCV remains the default here, but flag it.
+    if (is.null(pat)) pat <- .assignment_pattern(W)
+    if (!identical(pat$type, "block")) {
+      warning("Treatment adoption is staggered / non-block; leave-one-cell-out ",
+              "CV cannot mimic the design's missingness pattern and may select ",
+              "unreliable penalties. Consider trop_control(cv_method = ",
+              "\"placebo\"), which resamples the actual adoption patterns.",
+              call. = FALSE)
+    }
     du_cache <- lapply(seq_len(nrow(cv_cells)), function(k) {
       i <- cv_cells[k, 1]; t <- cv_cells[k, 2]
       Wk <- W; Wk[i, t] <- 1
@@ -742,11 +798,17 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @param cv_cycles Number of coordinate-descent cycles in penalty selection.
 #' @param cv_method Penalty cross-validation criterion. `"loocv"` (default)
 #'   scores held-out control-cell prediction error (the paper's eq. (4)-(5));
-#'   `"placebo"` instead assigns placebo blocks to control units and minimises
-#'   the mean squared placebo ATT (the placebo-RMSE criterion used by the
-#'   official Python/Stata packages). Ignored when the penalties are supplied via
-#'   `lambda` (CV is then skipped). The placebo criterion always uses the pooled
-#'   (block-centre) ATT, even when the final fit uses `anchor = "per_cell"`.
+#'   `"placebo"` instead stamps the *actual* treated-unit adoption patterns
+#'   onto randomly resampled control units and minimises the mean squared
+#'   placebo ATT (the placebo-RMSE / pattern-resampling criterion of the
+#'   official Python and Stata packages). Under block adoption the two placebo
+#'   variants coincide; under staggered adoption each placebo draw reproduces
+#'   the real cohort structure, so `"placebo"` is the recommended choice there
+#'   (a warning is emitted if `"loocv"` is used on a staggered design).
+#'   Ignored when the penalties are supplied via `lambda` (CV is then
+#'   skipped). The placebo criterion always uses the pooled (per-cohort
+#'   block-centre, cell-weighted) ATT, even when the final fit uses
+#'   `anchor = "per_cell"`.
 #' @param n_placebo Number of placebo assignments drawn when
 #'   `cv_method = "placebo"` (larger is more stable but slower).
 #' @param max_cells Threshold for `anchor = "auto"` to switch to pooled weights.
