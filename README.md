@@ -231,9 +231,9 @@ The below is how the original TROP paper, the official Python/Stata packages, an
 |  | TROP Paper | Python | Stata | R (cfcompare)  |
 |:--|:--|:--|:--|:--|
 | **Solver** | Silent | CVXPY using SCS or OSQP | FISTA (accelerated proximal gradient) | Soft-impute-style proximal gradient (base R only)|
-| **Weight anchoring** | Per-cell  | Pooled only | Per-cell by default and pooled as an option | Per-cell by default and pooled and auto (chooseing by treated-cell count) as an option |
-| **CV criterion** | LOOCV | Placebo-RMSE only | Placebo resampling and LOOCV | LOOCV by default and placebo-RMSE as an option |
-| **Outcome pre-processing** | Raw Y | Raw Y | Standardized | Raw Y by default and standardized as an option |
+| **Weight anchoring** | Per-cell  | Pooled only | Pooled by default and per-cell as an option | Per-cell by default and pooled and auto (chooseing by treated-cell count) as an option |
+| **CV criterion** | LOOCV | Placebo-RMSE only | Placebo resampling and LOOCV (placebo only under block/staggered treatment) | LOOCV by default and placebo-RMSE as an option |
+| **Outcome pre-processing** | Raw Y | Raw Y | Standardized by default and raw Y as an option | Raw Y by default and standardized as an option |
 | **Covariates** | Yes | No | No | Yes |
 | **Inference** | Bootstrap | None | Bootstrap | Bootstrap or jackknife (when available) |
 
