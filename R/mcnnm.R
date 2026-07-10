@@ -188,6 +188,11 @@
   lambda_eff <- lambda + lambda_add
   N <- nrow(Y); Tt <- ncol(Y)
   ww <- mask * w
+  # Non-finite outcome cells (NA holes of an unbalanced panel) carry no
+  # information: force their loss weight to zero. Without this they would enter
+  # the loss below with the zero-filled target Yf = 0 and drag the fit (and the
+  # unit/time fixed effects) towards zero at those cells.
+  ww[!is.finite(Y)] <- 0
   Lip <- max(ww)
   if (!is.finite(Lip) || Lip <= 0) Lip <- 1
   Yf <- Y

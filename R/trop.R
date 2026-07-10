@@ -275,21 +275,41 @@
                           X = X)
       cells <- matrix(FALSE, nrow(Yp), Tt)
       cells[gr$us, gr$cols] <- TRUE       # this cohort's placebo cells
-      tau_g <- mean((Yp - fit$M)[cells])
-      att   <- att + gr$size * tau_g
-      wsum  <- wsum + gr$size
+      # Only observed cells can be scored: on an unbalanced panel a placebo
+      # cell can land on an NA hole. Cohorts are combined weighted by their
+      # *scored* cell count (equal to gr$size on a complete panel).
+      cells <- cells & is.finite(Yp)
+      sz <- sum(cells)
+      if (sz > 0L) {
+        tau_g <- mean((Yp - fit$M)[cells])
+        att   <- att + sz * tau_g
+        wsum  <- wsum + sz
+      }
       if (keep_state) states[[g]] <- .solver_state(fit)
     }
-    err <- (att / wsum)^2
+    # A draw with no scoreable cell at all (every placebo cell unobserved) is
+    # skipped rather than poisoning the criterion, mirroring the per-draw
+    # skipping of the official Stata command (trop_placebo_rmse_path()).
+    err <- if (wsum > 0) (att / wsum)^2 else NA_real_
     if (keep_state) list(err = err, state = states) else err
   }
   par <- (ctrl$workers %||% 1L) > 1L
   res <- .par_lapply(seq_along(pb$draws), one, parallel = par)
+  # Skipped (degenerate) draws are dropped from the criterion; if every draw
+  # was degenerate the criterion is undefined and the search cannot proceed.
+  Q_of <- function(errs) {
+    errs <- errs[is.finite(errs)]
+    if (!length(errs))
+      stop("Placebo cross-validation: no placebo draw produced a scoreable ",
+           "cell (check for missing outcomes on the control units).",
+           call. = FALSE)
+    mean(errs)
+  }
   if (keep_state) {
-    list(Q = mean(vapply(res, function(r) r$err, numeric(1))),
+    list(Q = Q_of(vapply(res, function(r) r$err, numeric(1))),
          warm = lapply(res, function(r) r$state))
   } else {
-    list(Q = mean(unlist(res, use.names = FALSE)), warm = NULL)
+    list(Q = Q_of(unlist(res, use.names = FALSE)), warm = NULL)
   }
 }
 
@@ -668,7 +688,8 @@ trop <- function(data, outcome, treatment, unit, time,
  .with_workers(control$workers %||% 1L, {
   # ---- choose penalties via CV (unless supplied) ----
   if (is.null(lambda)) {
-    cv_cells <- .sample_control_cells(W, control$n_cv_cells, control$seed)
+    cv_cells <- .sample_control_cells(W, control$n_cv_cells, control$seed,
+                                      Y = Y)
     lam <- .trop_select_lambda(Y, W, grids, control, cv_cells, verbose, X = X,
                                pat = pat)
   } else {
@@ -707,8 +728,17 @@ trop <- function(data, outcome, treatment, unit, time,
 
 #' @keywords internal
 #' @noRd
-.sample_control_cells <- function(W, n, seed = NULL) {
+.sample_control_cells <- function(W, n, seed = NULL, Y = NULL) {
   ctrl_idx <- which(W == 0, arr.ind = TRUE)
+  # Only observed cells can be held out and scored: on an unbalanced panel a
+  # non-finite outcome cell would make the CV criterion NA (and thereby break
+  # the whole penalty search), so drop such cells when Y is supplied.
+  if (!is.null(Y)) {
+    ctrl_idx <- ctrl_idx[is.finite(Y[ctrl_idx]), , drop = FALSE]
+    if (nrow(ctrl_idx) == 0L)
+      stop("No observed (finite-outcome) control cells available for ",
+           "cross-validation.", call. = FALSE)
+  }
   # n = Inf or n <= 0 means "all control cells": the paper's full eq. (5)
   # criterion, matching the Stata command's cells(0).
   if (!is.finite(n) || n <= 0) return(ctrl_idx)

@@ -120,7 +120,7 @@ trop_sensitivity <- function(data, outcome, treatment, unit, time,
   y_vals <- axis_vals(y_pen)
 
   if (!is.null(seed)) control$seed <- seed
-  cv_cells <- .sample_control_cells(W, control$n_cv_cells, control$seed)
+  cv_cells <- .sample_control_cells(W, control$n_cv_cells, control$seed, Y = Y)
 
   # value of the held-fixed penalty: user scalar, or CV-chosen once
   fixed_val <- user_grids[[fixed_pen]]
