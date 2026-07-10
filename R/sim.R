@@ -181,7 +181,7 @@ sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
 #' @examples
 #' real <- sim_panel(N = 16, T = 10, n_treated = 0L, att = 0, seed = 1)
 #' ss <- sim_semisynthetic(real, "y", "id", "t",
-#'                         n_treated = 6, t0 = 14, att = 3, seed = 2)
+#'                         n_treated = 6, t0 = 8, att = 3, seed = 2)
 #' mean(ss$tau[ss$w == 1])   # true ATT = 3
 sim_semisynthetic <- function(data, outcome, unit, time,
                               n_treated, t0 = NULL, att = 1, effect = NULL,
@@ -275,7 +275,7 @@ sim_semisynthetic <- function(data, outcome, unit, time,
 #' @examples
 #' real <- sim_panel(N = 16, T = 10, n_treated = 0L, att = 0, seed = 1)
 #' ss <- sim_semisynthetic(real, "y", "id", "t",
-#'                         n_treated = 6, t0 = 14, att = 3, seed = 2)
+#'                         n_treated = 6, t0 = 8, att = 3, seed = 2)
 #' true_att(ss)   # 3
 #' @export
 true_att <- function(data, treatment = "w", tau = "tau") {

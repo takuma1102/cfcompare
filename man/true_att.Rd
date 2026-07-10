@@ -30,7 +30,7 @@ hand.
 \examples{
 real <- sim_panel(N = 16, T = 10, n_treated = 0L, att = 0, seed = 1)
 ss <- sim_semisynthetic(real, "y", "id", "t",
-                        n_treated = 6, t0 = 14, att = 3, seed = 2)
+                        n_treated = 6, t0 = 8, att = 3, seed = 2)
 true_att(ss)   # 3
 }
 \seealso{

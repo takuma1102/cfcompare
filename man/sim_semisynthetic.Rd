@@ -64,7 +64,7 @@ Athey, Imbens, Qu & Viviano (2026). Pair it with \code{\link[=panel_compare]{pan
 \examples{
 real <- sim_panel(N = 16, T = 10, n_treated = 0L, att = 0, seed = 1)
 ss <- sim_semisynthetic(real, "y", "id", "t",
-                        n_treated = 6, t0 = 14, att = 3, seed = 2)
+                        n_treated = 6, t0 = 8, att = 3, seed = 2)
 mean(ss$tau[ss$w == 1])   # true ATT = 3
 }
 \seealso{
