@@ -12,8 +12,9 @@
 #' returns the predicted untreated outcome matrix.
 #' @keywords internal
 #' @noRd
-.oos_predict_native <- function(Y, fit_mask, wmat, lambda_nn, control) {
-  fit <- .mcnnm_fit(Y, fit_mask, wmat, lambda_nn,
+.oos_predict_native <- function(Y, fit_mask, wmat, lambda_nn, control,
+                                lambda_add = 0) {
+  fit <- .mcnnm_fit(Y, fit_mask, wmat, lambda_nn, lambda_add = lambda_add,
                     max_iter = control$max_iter, tol = control$tol,
                     svd_method = control$svd %||% "truncated")
   fit$M
@@ -165,7 +166,8 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
           wmat <- if (meth == "TROP")
             .oos_weight_matrix(Y, excl, pseudo, held_periods, lam) else
             matrix(1, N, Tt)
-          Mhat <- .oos_predict_native(Y, fit_mask, wmat, lam$nn, control)
+          Mhat <- .oos_predict_native(Y, fit_mask, wmat, lam$nn, control,
+                                      lambda_add = lam$nn_floor %||% 0)
           out[[meth]] <- sqrt(mean((Y[H] - Mhat[H])^2))
         }
       }

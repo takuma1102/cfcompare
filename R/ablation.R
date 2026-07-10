@@ -71,20 +71,31 @@ trop_ablation <- function(data, outcome, treatment, unit, time,
   lam <- fit_full$lambda
   nn_finite <- if (is.finite(lam$nn)) lam$nn else
     stats::sd(data[[outcome]], na.rm = TRUE)
+  # Every spec carries the base fit's resolved nuclear-norm stabilising floor
+  # (0 when disabled), so the trop() refits and the placebo-RMSE .trop_att()
+  # solves below all use the same effective lambda_nn convention as the full
+  # fit. It is a no-op for the lambda_nn = Inf rows.
+  nn_fl <- lam$nn_floor %||% 0
 
   specs <- list(
     list(key = "full", spec = "TROP (full)",
-         lambda = list(time = lam$time, unit = lam$unit, nn = lam$nn)),
+         lambda = list(time = lam$time, unit = lam$unit, nn = lam$nn,
+                       nn_floor = nn_fl)),
     list(key = "no_nn", spec = "No regression adjustment",
-         lambda = list(time = lam$time, unit = lam$unit, nn = Inf)),
+         lambda = list(time = lam$time, unit = lam$unit, nn = Inf,
+                       nn_floor = nn_fl)),
     list(key = "no_unit", spec = "No unit weights",
-         lambda = list(time = lam$time, unit = 0, nn = lam$nn)),
+         lambda = list(time = lam$time, unit = 0, nn = lam$nn,
+                       nn_floor = nn_fl)),
     list(key = "no_time", spec = "No time weights",
-         lambda = list(time = 0, unit = lam$unit, nn = lam$nn)),
+         lambda = list(time = 0, unit = lam$unit, nn = lam$nn,
+                       nn_floor = nn_fl)),
     list(key = "mc", spec = "Matrix completion",
-         lambda = list(time = 0, unit = 0, nn = nn_finite)),
+         lambda = list(time = 0, unit = 0, nn = nn_finite,
+                       nn_floor = nn_fl)),
     list(key = "did", spec = "Difference-in-differences",
-         lambda = list(time = 0, unit = 0, nn = Inf))
+         lambda = list(time = 0, unit = 0, nn = Inf,
+                       nn_floor = nn_fl))
   )
 
   one <- function(s) {

@@ -50,7 +50,11 @@ trop_placebo_test <- function(object, B = 500L,
 
   Y <- object$panel$Y; W <- object$panel$W; X <- object$panel$X
   lam0 <- object$lambda
-  lam <- list(time = lam0$time, unit = lam0$unit, nn = lam0$nn)
+  # Carry the fit's resolved nuclear-norm stabilising floor along with the
+  # penalties, so the placebo re-solves use the same effective lambda_nn as the
+  # observed fit did.
+  lam <- list(time = lam0$time, unit = lam0$unit, nn = lam0$nn,
+              nn_floor = lam0$nn_floor %||% 0)
   anchor <- object$anchor %||% "pooled"
   N <- nrow(Y); Tt <- ncol(Y)
   tu <- object$pattern$treated_units

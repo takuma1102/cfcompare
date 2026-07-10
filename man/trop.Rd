@@ -38,7 +38,12 @@ are returned in \verb{$phi}.}
 
 \item{lambda}{Optional named list \code{list(time=, unit=, nn=)} to fix the
 penalties and skip cross-validation. When \code{standardize = TRUE}, supplied
-penalties are interpreted on the standardized-outcome scale.}
+penalties are interpreted on the standardized-outcome scale. Whether \code{nn}
+is supplied here or chosen by cross-validation, the solver adds the small
+scale-relative stabilising floor \code{nn_floor} (see \code{\link[=trop_control]{trop_control()}}) to
+every \emph{finite} \code{nn} (the reported \verb{$lambda$nn} stays nominal and the
+resolved floor is stored in \verb{$lambda$nn_floor}); set
+\code{control = trop_control(nn_floor = 0)} to apply \code{nn} exactly as given.}
 
 \item{standardize}{Logical; if \code{TRUE}, the outcome is standardized internally
 as \code{(Y - mean(Y)) / sd(Y)} (over all observed cells) before fitting, and

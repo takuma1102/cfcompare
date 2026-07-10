@@ -246,6 +246,16 @@ The below is how the original TROP paper, the official Python/Stata packages, an
 > Third, penalties are chosen by leave-one-control-cell-out prediction error by default; a placebo-RMSE criterion is also available via `trop_control(cv_method = "placebo")`.
 > Fourth, this package supports both anchoring modes of per-cell (solving a separate local weighting problem for each treated cell by using `trop_matrix()`) and pooled methods (constructing one set of weights for the entire treated group; faster than per-cell).
 > Fifth, this package allows to use covariates through `panel_compare`.
+> Sixth, for numerical stability the solver adds a small *scale-relative* stabilising floor to every finite `lambda_nn`
+> (`trop_control(nn_floor = "auto")`, resolved as `nn_floor_scale * s1` with `s1` the operator norm of the
+> two-way-demeaned control outcome on the fitting scale, `nn_floor_scale = 1e-3` by default): at `lambda_nn = 0`
+> the nuclear-norm proximal step is the identity and the completion of the treated cells is not pinned down, so a
+> strictly positive floor keeps the weak-regularisation limit well posed. Because it is resolved on the fitting
+> scale, the same relative floor applies whether the outcome is raw (the default) or standardized.
+> `lambda_nn = Inf` (the DID/TWFE special case used for the exact numerical-agreement checks) is never affected,
+> reported `lambda` values stay nominal (the resolved floor is stored as `$lambda$nn_floor`), and
+> `trop_control(nn_floor = 0)` disables the adjustment so penalties are applied exactly as supplied — use this for
+> like-for-like comparisons against the official packages at identical finite penalty values.
 > Lastly, estimation uses the raw, non-standardized outcome by default, so that `lambda` values are on the outcome's natural scale. `trop(standardize = TRUE)` optionally standardizes the outcome.
 
 

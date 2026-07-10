@@ -27,7 +27,14 @@ inferred from \code{W} as the rows with at least one treated cell.}
 \item{lambda_unit, lambda_time}{Non-negative decay parameters for the unit and
 time weights.}
 
-\item{lambda_nn}{Nuclear-norm penalty; use \code{Inf} to drop the low-rank term.}
+\item{lambda_nn}{Nuclear-norm penalty; use \code{Inf} to drop the low-rank term.
+As in \code{\link[=trop]{trop()}}, the solver adds the small scale-relative stabilising floor
+\code{nn_floor} (see \code{\link[=trop_control]{trop_control()}}) to a finite \code{lambda_nn}; \code{Inf} is never
+affected, so the weighted-TWFE special case used for the exact
+numerical-agreement checks is unchanged. For like-for-like comparisons
+against other implementations at identical finite penalty values, pass
+\code{control = trop_control(nn_floor = 0)} so \code{lambda_nn} is applied exactly
+as supplied.}
 
 \item{treated_periods}{Number of final columns treated as the post block, used
 to build the pre-period mask and the time-distance centre. Defaults to

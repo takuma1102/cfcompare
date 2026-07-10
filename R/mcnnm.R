@@ -139,6 +139,15 @@
 #' @param mask N x T 0/1 matrix; 1 = cell is used in the loss.
 #' @param w N x T non-negative observation weights (only used where `mask == 1`).
 #' @param lambda Nuclear-norm penalty (use `Inf` for no low-rank term).
+#' @param lambda_add Non-negative stabilising floor *added* to a finite
+#'   `lambda` before the proximal step (`lambda = Inf` is unaffected). At
+#'   `lambda = 0` the soft-threshold degenerates to the identity, the
+#'   completion of the excluded (treated / held-out) cells is no longer pinned
+#'   down by the program, and the iteration converges slowly; a small strictly
+#'   positive floor keeps that limit well posed. Callers are expected to pass a
+#'   *resolved* numeric value (see `trop_control(nn_floor=)` and
+#'   `.trop_resolve_nn_floor()`); the default `0` leaves `lambda` exactly as
+#'   supplied.
 #' @param max_iter Maximum number of outer iterations. Higher by default because
 #'   small `lambda` converges slowly under the proximal-gradient iteration.
 #' @param tol Reference relative-Frobenius convergence tolerance. Because the
@@ -163,13 +172,20 @@
 #' @return A list with the fitted matrix `M`, low-rank part `L` (the residual
 #'   `R` when covariates are present), fixed effects `alpha`/`beta`/`grand`,
 #'   covariate coefficients `phi` (length-K, empty if no covariates), estimated
-#'   `rank`, iterations `iter`, and `lambda`.
+#'   `rank`, iterations `iter`, the nominal `lambda`, and the applied floor
+#'   `lambda_add` (the solve used `lambda + lambda_add`).
 #' @keywords internal
 #' @noRd
-.mcnnm_fit <- function(Y, mask, w, lambda,
+.mcnnm_fit <- function(Y, mask, w, lambda, lambda_add = 0,
                        max_iter = 2000L, tol = 1e-6, state_init = NULL,
                        svd_method = c("truncated", "full"), X = NULL) {
   svd_method <- match.arg(svd_method)
+  # Effective nuclear-norm penalty: the stabilising floor is additive on the
+  # penalty (not on the threshold), so it lives on the same scale as lambda
+  # itself; Inf + lambda_add = Inf, so the TWFE/DID special case is untouched.
+  if (!(is.numeric(lambda_add) && length(lambda_add) == 1L &&
+        is.finite(lambda_add) && lambda_add >= 0)) lambda_add <- 0
+  lambda_eff <- lambda + lambda_add
   N <- nrow(Y); Tt <- ncol(Y)
   ww <- mask * w
   Lip <- max(ww)
@@ -185,8 +201,10 @@
   # loss (whose gradient has Lipschitz constant 2 * Lip), so the matching
   # threshold is lambda / (2 * Lip). Using lambda / Lip would instead solve the
   # 1/2-loss variant and make lambda_nn half of the paper's / Python's / Stata's
-  # scale.
-  thr <- lambda / (2 * Lip)
+  # scale. The threshold (and the nn-adaptive tolerance below) uses the
+  # *effective* penalty lambda + lambda_add, so the stabilising floor and the
+  # convergence control see the same regularisation strength.
+  thr <- lambda_eff / (2 * Lip)
   # nn-adaptive convergence tolerance. The soft-impute iteration converges
   # slowly when lambda is small (weak shrinkage), so a fixed relative tolerance
   # stops prematurely there. Scale tol by the dimensionless shrinkage strength
@@ -267,5 +285,6 @@
     if (sqrt(sum((M - M_old)^2)) / denom < tol_eff) break
   }
   list(M = M, L = L, alpha = a, beta = b, grand = g,
-       phi = phi, rank = rnk, iter = it, lambda = lambda)
+       phi = phi, rank = rnk, iter = it, lambda = lambda,
+       lambda_add = lambda_add)
 }

@@ -103,9 +103,30 @@
 .trop_solve <- function(Y, W, wmat, lam, ctrl, state_init = NULL, X = NULL) {
   mask <- (W == 0) * 1
   .mcnnm_fit(Y, mask, wmat, lam$nn,
+             lambda_add = .nn_floor_of(lam, ctrl),
              max_iter = ctrl$max_iter, tol = ctrl$tol,
              state_init = state_init, svd_method = ctrl$svd %||% "truncated",
              X = X)
+}
+
+#' Resolved nuclear-norm floor for a solve.
+#'
+#' The floor added to every finite `lambda_nn` (see `trop_control(nn_floor=)`).
+#' A value stored in the lambda list (`lam$nn_floor`, written by
+#' `.trop_engine()` at fit time) takes precedence, so downstream consumers of a
+#' fit -- the event study, `counterfactual_matrix()`, plots, placebo tests --
+#' reproduce the fit's effective penalty even when they are called with a fresh
+#' `trop_control()`. Otherwise a *numeric* `ctrl$nn_floor` (i.e. one already
+#' resolved by `.trop_resolve_nn_floor()` at an entry point) is used. An
+#' unresolved `"auto"` deliberately falls back to `0` here: internal code never
+#' guesses a data scale on its own.
+#' @keywords internal
+#' @noRd
+.nn_floor_of <- function(lam, ctrl) {
+  ok <- function(v) is.numeric(v) && length(v) == 1L && is.finite(v) && v >= 0
+  v <- lam$nn_floor
+  if (!ok(v)) v <- ctrl$nn_floor
+  if (ok(v)) v else 0
 }
 
 #' Extract the warm-startable state from a solver fit.
@@ -366,11 +387,20 @@
   lam
 }
 
-#' Default penalty grids derived from the data scale.
+#' Operator norm of the two-way-demeaned control outcome (data-scale reference).
+#'
+#' The largest singular value `s1` of the control-cell outcome matrix after
+#' mean-filling the treated / missing cells, two-way demeaning and (when
+#' covariates are supplied) partialling the covariates out. This single number
+#' is the package's nuclear-norm scale reference: the default `lambda_nn` grid
+#' is spread as multiples of it, and the automatic stabilising floor
+#' (`trop_control(nn_floor = "auto")`) is a small fraction of it. Computed on
+#' the *fitting-scale* outcome, so under `standardize = TRUE` it (and anything
+#' derived from it) shrinks by exactly `1 / sd(Y)` -- the floor is
+#' scale-relative in both modes.
 #' @keywords internal
 #' @noRd
-.trop_default_grids <- function(Y, W, n_unit = 6L, n_time = 7L, X = NULL) {
-  # nuclear-norm grid from singular values of the demeaned control matrix
+.trop_nn_scale <- function(Y, W, X = NULL) {
   Yc <- Y
   Yc[W == 1 | is.na(Yc)] <- NA
   fill <- mean(Yc, na.rm = TRUE)
@@ -379,7 +409,7 @@
   Z <- Z - rowMeans(Z)
   Z <- t(t(Z) - colMeans(Z))
   # With covariates the nuclear norm penalises the residual R = L - X phi, so
-  # scale the grid off the covariate-residualised matrix (partial the covariates
+  # take the scale off the covariate-residualised matrix (partial the covariates
   # out of the already two-way-demeaned Z).
   Xl <- .as_cov_list(X, nrow(Y), ncol(Y))
   if (length(Xl)) {
@@ -388,7 +418,49 @@
     cf <- qr.coef(qr(Xdd), as.numeric(Z)); cf[is.na(cf)] <- 0
     Z <- matrix(as.numeric(Z) - as.numeric(Xdd %*% cf), nrow(Y), ncol(Y))
   }
-  s1 <- tryCatch(max(svd(Z)$d), error = function(e) 1)
+  tryCatch(max(svd(Z)$d), error = function(e) 1)
+}
+
+#' Resolve `trop_control(nn_floor=)` to a numeric value on the fitting scale.
+#'
+#' Called once at each user-facing entry point (where `Y`/`W` are available on
+#' the fitting scale) so that every internal solve of that fit sees the same
+#' resolved number. `"auto"` (the default) resolves to
+#' `nn_floor_scale * .trop_nn_scale(Y, W, X)`; a numeric `nn_floor` is
+#' validated and passed through unchanged (so resolution is idempotent), and
+#' `0` disables the floor entirely. A degenerate scale reference (zero /
+#' non-finite) falls back to `0`.
+#' @keywords internal
+#' @noRd
+.trop_resolve_nn_floor <- function(control, Y, W, X = NULL, s1 = NULL) {
+  v <- control$nn_floor %||% "auto"
+  if (is.numeric(v)) {
+    if (length(v) != 1L || !is.finite(v) || v < 0)
+      stop("`nn_floor` must be \"auto\" or a single non-negative finite number.",
+           call. = FALSE)
+    return(as.numeric(v))
+  }
+  if (!identical(v, "auto"))
+    stop("`nn_floor` must be \"auto\" or a single non-negative finite number.",
+         call. = FALSE)
+  cc <- control$nn_floor_scale %||% 1e-3
+  if (!is.numeric(cc) || length(cc) != 1L || !is.finite(cc) || cc < 0)
+    stop("`nn_floor_scale` must be a single non-negative finite number.",
+         call. = FALSE)
+  if (cc == 0) return(0)
+  if (is.null(s1)) s1 <- .trop_nn_scale(Y, W, X)
+  if (!is.finite(s1) || s1 <= 0) return(0)
+  cc * s1
+}
+
+#' Default penalty grids derived from the data scale.
+#' @keywords internal
+#' @noRd
+.trop_default_grids <- function(Y, W, n_unit = 6L, n_time = 7L, X = NULL,
+                                s1 = NULL) {
+  # nuclear-norm grid from singular values of the demeaned control matrix
+  # (.trop_nn_scale; a precomputed value can be passed in to avoid a second SVD)
+  if (is.null(s1)) s1 <- .trop_nn_scale(Y, W, X)
   # The solver's soft-threshold is lambda_nn / (2 * max(weight)) (paper eq. (2)
   # loss, with no 1/2 factor), so with uniform weights the low-rank term is fully
   # shrunk to zero once lambda_nn >= 2 * s1. These multipliers spread the finite
@@ -438,7 +510,12 @@
 #'   are returned in `$phi`.
 #' @param lambda Optional named list `list(time=, unit=, nn=)` to fix the
 #'   penalties and skip cross-validation. When `standardize = TRUE`, supplied
-#'   penalties are interpreted on the standardized-outcome scale.
+#'   penalties are interpreted on the standardized-outcome scale. Whether `nn`
+#'   is supplied here or chosen by cross-validation, the solver adds the small
+#'   scale-relative stabilising floor `nn_floor` (see [trop_control()]) to
+#'   every *finite* `nn` (the reported `$lambda$nn` stays nominal and the
+#'   resolved floor is stored in `$lambda$nn_floor`); set
+#'   `control = trop_control(nn_floor = 0)` to apply `nn` exactly as given.
 #' @param standardize Logical; if `TRUE`, the outcome is standardized internally
 #'   as `(Y - mean(Y)) / sd(Y)` (over all observed cells) before fitting, and
 #'   the ATT, standard error, confidence interval, per-cell effects and
@@ -501,7 +578,15 @@ trop <- function(data, outcome, treatment, unit, time,
     anchor <- if (n_cells <= control$max_cells) "per_cell" else "pooled"
   }
 
-  if (is.null(grids)) grids <- .trop_default_grids(Y, W, X = X)
+  # Resolve the nuclear-norm stabilising floor (trop_control(nn_floor=)) on the
+  # fitting-scale outcome -- so it is scale-relative both for raw and for
+  # standardized fits -- and share the operator-norm computation with the
+  # default grids. .trop_engine() would resolve it too (idempotently); doing it
+  # here keeps a single SVD when the default grids are used.
+  nn_scale <- if (is.null(grids) || !is.numeric(control$nn_floor %||% "auto"))
+    .trop_nn_scale(Y, W, X) else NULL
+  control$nn_floor <- .trop_resolve_nn_floor(control, Y, W, X, s1 = nn_scale)
+  if (is.null(grids)) grids <- .trop_default_grids(Y, W, X = X, s1 = nn_scale)
 
   eng <- .trop_engine(Y, W, pat, lambda, grids, control, anchor, se,
                       control$conf_level, verbose, X = X)
@@ -574,6 +659,10 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @noRd
 .trop_engine <- function(Y, W, pat, lambda, grids, control, anchor, se,
                          conf_level, verbose = FALSE, X = NULL) {
+ # Resolve the nuclear-norm stabilising floor if the caller has not already
+ # (idempotent for a numeric value), so the CV solves below, the final fit and
+ # the resamples all apply the same effective penalty.
+ control$nn_floor <- .trop_resolve_nn_floor(control, Y, W, X)
  .with_workers(control$workers %||% 1L, {
   # ---- choose penalties via CV (unless supplied) ----
   if (is.null(lambda)) {
@@ -584,6 +673,11 @@ trop <- function(data, outcome, treatment, unit, time,
     lam <- utils::modifyList(list(time = 0, unit = 0, nn = Inf), lambda)
     lam$Q <- NA_real_
   }
+  # Stamp the resolved floor into the lambda list: it travels with the fit, so
+  # everything that later re-solves from `$lambda` (event study, plots,
+  # counterfactual_matrix(), placebo tests) reproduces the same effective
+  # penalty even under a fresh trop_control().
+  lam$nn_floor <- control$nn_floor
 
   est <- .trop_att(Y, W, lam, control, anchor, pat, X = X)
 
@@ -817,6 +911,31 @@ trop <- function(data, outcome, treatment, unit, time,
 #'   (`se = "bootstrap"`).
 #' @param boot_ci Bootstrap confidence-interval type: `"percentile"` or
 #'   `"normal"`.
+#' @param nn_floor Small non-negative stabilising constant *added* to every
+#'   finite `lambda_nn` inside the solver (`lambda_nn = Inf`, the DID/TWFE
+#'   special case, is never affected). Rationale: the nuclear-norm proximal
+#'   step soft-thresholds singular values by `lambda_nn / (2 max w)`, so at
+#'   `lambda_nn = 0` the step degenerates to the identity, the completion of
+#'   the treated cells is no longer pinned down by the program, and soft-impute
+#'   converges slowly; a strictly positive floor keeps the
+#'   weak-regularisation limit well posed. The default `"auto"` resolves to
+#'   `nn_floor_scale * s1`, where `s1` is the operator norm (largest singular
+#'   value) of the two-way-demeaned control outcome -- the same data-scale
+#'   reference the default `lambda_nn` grid is built from. The floor is
+#'   therefore *relative to the outcome scale*: it is resolved on the fitting
+#'   scale, so it adapts automatically when `standardize = TRUE` (both modes
+#'   get the same floor in relative terms). Supply a single non-negative
+#'   number to use that exact value instead (interpreted on the fitting scale,
+#'   like `lambda`), or `0` to disable the adjustment entirely, in which case
+#'   penalties are applied exactly as given -- use `nn_floor = 0` for
+#'   like-for-like numerical comparisons against other implementations at
+#'   identical penalty values. The resolved value is stored in the fit as
+#'   `$lambda$nn_floor` and printed when positive.
+#' @param nn_floor_scale Relative constant used when `nn_floor = "auto"`: the
+#'   resolved floor is `nn_floor_scale * s1` (default `1e-3`, i.e. 0.1\% of the
+#'   data's operator norm -- an epsilon next to the default `lambda_nn` grid,
+#'   whose smallest finite point is `0.04 * s1`). Ignored when `nn_floor` is
+#'   numeric.
 #' @param svd Singular-value decomposition used by the soft-impute solver:
 #'   `"truncated"` (default) computes only the leading singular triplets with
 #'   `RSpectra` when it is installed and the matrix is large enough to benefit,
@@ -838,15 +957,26 @@ trop_control <- function(max_iter = 2000L, tol = 1e-6,
                          n_boot = 200L, boot_ci = c("percentile", "normal"),
                          svd = c("truncated", "full"),
                          cv_method = c("loocv", "placebo"), n_placebo = 30L,
+                         nn_floor = "auto", nn_floor_scale = 1e-3,
                          workers = 1L,
                          seed = NULL) {
   boot_ci <- match.arg(boot_ci)
   svd <- match.arg(svd)
   cv_method <- match.arg(cv_method)
+  if (!(identical(nn_floor, "auto") ||
+        (is.numeric(nn_floor) && length(nn_floor) == 1L &&
+         is.finite(nn_floor) && nn_floor >= 0)))
+    stop("`nn_floor` must be \"auto\" or a single non-negative finite number.",
+         call. = FALSE)
+  if (!(is.numeric(nn_floor_scale) && length(nn_floor_scale) == 1L &&
+        is.finite(nn_floor_scale) && nn_floor_scale >= 0))
+    stop("`nn_floor_scale` must be a single non-negative finite number.",
+         call. = FALSE)
   list(max_iter = max_iter, tol = tol, n_cv_cells = n_cv_cells,
        cv_cycles = cv_cycles, max_cells = max_cells,
        conf_level = conf_level, n_boot = n_boot, boot_ci = boot_ci,
        svd = svd, cv_method = cv_method, n_placebo = n_placebo,
+       nn_floor = nn_floor, nn_floor_scale = nn_floor_scale,
        workers = workers,
        seed = seed)
 }
@@ -866,6 +996,11 @@ print.trop <- function(x, ...) {
               x$lambda$time, x$lambda$unit,
               ifelse(is.infinite(x$lambda$nn), "Inf",
                      sprintf("%.3g", x$lambda$nn))))
+  fl <- x$lambda$nn_floor %||% 0
+  if (is.numeric(fl) && is.finite(fl) && fl > 0 && is.finite(x$lambda$nn)) {
+    cat(sprintf(paste0("  lambda_nn stabilising floor: +%.3g (added in the ",
+                       "solver; trop_control(nn_floor = 0) disables)\n"), fl))
+  }
   if (std) {
     cat(sprintf("  outcome standardized internally (mean %.4g, sd %.4g); ATT/SE/CI on the raw scale\n",
                 x$scaling$center, x$scaling$scale))

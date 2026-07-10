@@ -16,6 +16,8 @@ trop_control(
   svd = c("truncated", "full"),
   cv_method = c("loocv", "placebo"),
   n_placebo = 30L,
+  nn_floor = "auto",
+  nn_floor_scale = 0.001,
   workers = 1L,
   seed = NULL
 )
@@ -68,6 +70,33 @@ block-centre, cell-weighted) ATT, even when the final fit uses
 
 \item{n_placebo}{Number of placebo assignments drawn when
 \code{cv_method = "placebo"} (larger is more stable but slower).}
+
+\item{nn_floor}{Small non-negative stabilising constant \emph{added} to every
+finite \code{lambda_nn} inside the solver (\code{lambda_nn = Inf}, the DID/TWFE
+special case, is never affected). Rationale: the nuclear-norm proximal
+step soft-thresholds singular values by \verb{lambda_nn / (2 max w)}, so at
+\code{lambda_nn = 0} the step degenerates to the identity, the completion of
+the treated cells is no longer pinned down by the program, and soft-impute
+converges slowly; a strictly positive floor keeps the
+weak-regularisation limit well posed. The default \code{"auto"} resolves to
+\code{nn_floor_scale * s1}, where \code{s1} is the operator norm (largest singular
+value) of the two-way-demeaned control outcome -- the same data-scale
+reference the default \code{lambda_nn} grid is built from. The floor is
+therefore \emph{relative to the outcome scale}: it is resolved on the fitting
+scale, so it adapts automatically when \code{standardize = TRUE} (both modes
+get the same floor in relative terms). Supply a single non-negative
+number to use that exact value instead (interpreted on the fitting scale,
+like \code{lambda}), or \code{0} to disable the adjustment entirely, in which case
+penalties are applied exactly as given -- use \code{nn_floor = 0} for
+like-for-like numerical comparisons against other implementations at
+identical penalty values. The resolved value is stored in the fit as
+\verb{$lambda$nn_floor} and printed when positive.}
+
+\item{nn_floor_scale}{Relative constant used when \code{nn_floor = "auto"}: the
+resolved floor is \code{nn_floor_scale * s1} (default \code{1e-3}, i.e. 0.1\\% of the
+data's operator norm -- an epsilon next to the default \code{lambda_nn} grid,
+whose smallest finite point is \code{0.04 * s1}). Ignored when \code{nn_floor} is
+numeric.}
 
 \item{workers}{Number of parallel workers for the embarrassingly parallel
 loops (cross-validation cells, and the bootstrap / jackknife

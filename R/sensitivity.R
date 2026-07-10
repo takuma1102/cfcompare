@@ -100,7 +100,12 @@ trop_sensitivity <- function(data, outcome, treatment, unit, time,
   m <- .panel_to_matrices(data, outcome, treatment, unit, time)
   Y <- m$Y; W <- m$W
   pat <- .assignment_pattern(W)
-  grids <- .trop_default_grids(Y, W)
+  nn_scale <- .trop_nn_scale(Y, W)
+  grids <- .trop_default_grids(Y, W, s1 = nn_scale)
+  # Resolve the nuclear-norm stabilising floor once (trop_control(nn_floor=));
+  # every grid-point solve below then uses the same effective penalty as a
+  # trop() fit on the same data would.
+  control$nn_floor <- .trop_resolve_nn_floor(control, Y, W, s1 = nn_scale)
 
   user_grids <- list(time = lambda_time, unit = lambda_unit, nn = lambda_nn)
   axis_vals <- function(pen) {

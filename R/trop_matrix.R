@@ -65,6 +65,13 @@
 #' @param lambda_unit,lambda_time Non-negative decay parameters for the unit and
 #'   time weights.
 #' @param lambda_nn Nuclear-norm penalty; use `Inf` to drop the low-rank term.
+#'   As in [trop()], the solver adds the small scale-relative stabilising floor
+#'   `nn_floor` (see [trop_control()]) to a finite `lambda_nn`; `Inf` is never
+#'   affected, so the weighted-TWFE special case used for the exact
+#'   numerical-agreement checks is unchanged. For like-for-like comparisons
+#'   against other implementations at identical finite penalty values, pass
+#'   `control = trop_control(nn_floor = 0)` so `lambda_nn` is applied exactly
+#'   as supplied.
 #' @param treated_periods Number of final columns treated as the post block, used
 #'   to build the pre-period mask and the time-distance centre. Defaults to
 #'   `NULL`, in which case it is inferred from `W` as the number of periods in
@@ -109,6 +116,12 @@ trop_matrix <- function(Y, W, treated_units = NULL,
 
   wmat <- .trop_reference_weights(Y, treated_units, lambda_unit, lambda_time,
                                   treated_periods)
+  # Same solver convention as trop(): the small scale-relative stabilising
+  # floor from trop_control(nn_floor=) is added to a finite lambda_nn (Inf is
+  # untouched). For like-for-like numerical comparisons against other
+  # implementations at *identical* penalty values, pass
+  # control = trop_control(nn_floor = 0).
+  control$nn_floor <- .trop_resolve_nn_floor(control, Y, W)
   fit <- .trop_solve(Y, W, wmat, list(nn = lambda_nn), control)
   mean((Y - fit$M)[W == 1])
 }
