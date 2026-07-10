@@ -158,7 +158,7 @@ Inspect the TROP penalty surface by sweeping any two of the three penalties
 ```r
 g <- trop_sensitivity(
   df, "y", "w", "id", "t",
-  axes = c("unit", "time"), # You can also choose "nn" for lamda_nn
+  axes = c("unit", "time"), # You can also choose "nn" for lambda_nn
   anchor  = "pooled"  # 
 )
 
@@ -177,7 +177,7 @@ surfaces$att                   # matrix behind the ATT surface
 
 Other targeted diagnostics are available when needed.
 
-Use `trop_ablation` when you want to check how RMSEs change in accordance with the change in lamda penalties. (See also Table 5 in the original paper.)
+Use `trop_ablation` when you want to check how RMSEs change in accordance with the change in lambda penalties. (See also Table 5 in the original paper.)
 ```r
 trop_ablation(df, "y", "w", "id", "t")  # see below
 ```
