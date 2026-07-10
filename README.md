@@ -249,8 +249,7 @@ See the notes below for technical differences for this package's estimation from
 
 > Note 4 (covariates): this package allows to use covariates through `panel_compare`.
 
-> Note 5 (lambda_nn's floor): for numerical stability, the solver adds a small scale-relative stabilising floor to every finite `lambda_nn`
-> by default. `lambda_nn = Inf` (i.e., the DID/TWFE-like case) is never affected. `trop_control(nn_floor = 0)` disables the adjustment so penalties are applied exactly as supplied.
+> Note 5 (lambda_nn's floor): for numerical stability, the solver adds a small scale-relative stabilising floor to every finite `lambda_nn` by default. (Reported `lambda_nn` as part of results do not include the samll floor.) `lambda_nn = Inf` (i.e., the DID/TWFE-like case) is never affected. `trop_control(nn_floor = 0)` disables this adjustment so penalties are applied exactly as supplied.
 
 > Note 6 (standardization): estimation uses the raw, non-standardized outcome by default, so that `lambda` values are on the outcome's natural scale. `trop(standardize = TRUE)` optionally standardizes the outcome.
 
