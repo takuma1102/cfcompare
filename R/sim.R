@@ -42,11 +42,11 @@
 #'   additionally carries covariate columns `x1`, ..., `x{n_cov}`, and the true
 #'   coefficients are stored on `attr(., "phi")`.
 #' @examples
-#' df <- sim_panel(N = 30, T = 15, n_treated = 5, t0 = 11, seed = 42)
+#' df <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6, seed = 42)
 #' head(df)
 #'
 #' # Two covariates with known coefficients, recoverable by trop(covariates=):
-#' dc <- sim_panel(N = 30, T = 12, n_treated = 4, t0 = 9,
+#' dc <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6,
 #'                 n_cov = 2, phi = c(1.2, -0.7), seed = 1)
 #' attr(dc, "phi")
 #' @export
@@ -179,7 +179,7 @@ sim_panel <- function(N = 30, T = 20, n_treated = 5, t0 = NULL,
 #' @seealso [sim_panel()], [panel_compare()], [panel_rmse()]
 #' @export
 #' @examples
-#' real <- sim_panel(N = 40, T = 18, n_treated = 0L, att = 0, seed = 1)
+#' real <- sim_panel(N = 16, T = 10, n_treated = 0L, att = 0, seed = 1)
 #' ss <- sim_semisynthetic(real, "y", "id", "t",
 #'                         n_treated = 6, t0 = 14, att = 3, seed = 2)
 #' mean(ss$tau[ss$w == 1])   # true ATT = 3
@@ -273,7 +273,7 @@ sim_semisynthetic <- function(data, outcome, unit, time,
 #' @return A single numeric: the true ATT averaged over treated cells.
 #' @seealso [sim_semisynthetic()], [sim_panel()], [panel_compare()]
 #' @examples
-#' real <- sim_panel(N = 40, T = 18, n_treated = 0L, att = 0, seed = 1)
+#' real <- sim_panel(N = 16, T = 10, n_treated = 0L, att = 0, seed = 1)
 #' ss <- sim_semisynthetic(real, "y", "id", "t",
 #'                         n_treated = 6, t0 = 14, att = 3, seed = 2)
 #' true_att(ss)   # 3

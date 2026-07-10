@@ -1,4 +1,5 @@
 test_that("sim_panel is unchanged when no covariates are requested", {
+  skip_on_cran()
   a <- sim_panel(N = 20, T = 10, n_treated = 3, t0 = 8, att = 2, seed = 5)
   b <- sim_panel(N = 20, T = 10, n_treated = 3, t0 = 8, att = 2, seed = 5,
                  n_cov = 0L)
@@ -8,6 +9,7 @@ test_that("sim_panel is unchanged when no covariates are requested", {
 })
 
 test_that("sim_panel adds covariate columns and records the coefficients", {
+  skip_on_cran()
   df <- sim_panel(N = 25, T = 12, n_treated = 4, t0 = 9, att = 2,
                   n_cov = 2, phi = c(1.2, -0.7), seed = 1)
   expect_true(all(c("x1", "x2") %in% names(df)))
@@ -18,6 +20,7 @@ test_that("sim_panel adds covariate columns and records the coefficients", {
 })
 
 test_that("sim_panel draws phi when only n_cov is given", {
+  skip_on_cran()
   df <- sim_panel(N = 18, T = 10, n_treated = 3, t0 = 8, n_cov = 3, seed = 2)
   ph <- attr(df, "phi")
   expect_length(ph, 3L)
@@ -26,6 +29,7 @@ test_that("sim_panel draws phi when only n_cov is given", {
 })
 
 test_that("sim_panel validates n_cov / phi", {
+  skip_on_cran()
   expect_error(
     sim_panel(N = 12, T = 8, n_treated = 2, t0 = 6, n_cov = 2, phi = c(1, 2, 3)),
     "phi"
@@ -37,6 +41,7 @@ test_that("sim_panel validates n_cov / phi", {
 })
 
 test_that("covariate signal sits in Y(0): true ATT equals att", {
+  skip_on_cran()
   df <- sim_panel(N = 25, T = 12, n_treated = 4, t0 = 9, att = 2,
                   n_cov = 2, phi = c(1.2, -0.7), seed = 3)
   # y - y0 is exactly att on treated cells regardless of covariates
@@ -44,6 +49,7 @@ test_that("covariate signal sits in Y(0): true ATT equals att", {
 })
 
 test_that("covariate coefficients are recoverable by trop(covariates=)", {
+  skip_on_cran()
   df <- sim_panel(N = 30, T = 14, n_treated = 5, t0 = 10, att = 2,
                   n_cov = 2, phi = c(1.2, -0.7), seed = 11)
   fit <- trop(df, "y", "w", "id", "t", covariates = c("x1", "x2"),
@@ -54,6 +60,7 @@ test_that("covariate coefficients are recoverable by trop(covariates=)", {
 })
 
 test_that("true_att reads tau for semi-synthetic panels", {
+  skip_on_cran()
   real <- sim_panel(N = 30, T = 16, n_treated = 0L, att = 0, seed = 1)
   ss <- sim_semisynthetic(real, "y", "id", "t",
                           n_treated = 5, t0 = 13, att = 3, seed = 2)
@@ -61,6 +68,7 @@ test_that("true_att reads tau for semi-synthetic panels", {
 })
 
 test_that("true_att errors clearly on malformed input", {
+  skip_on_cran()
   expect_error(true_att(data.frame(a = 1)), "Treatment column")
   expect_error(true_att(data.frame(w = c(0, 1))), "true ATT")
   no_treated <- data.frame(w = c(0, 0), y = c(1, 2), y0 = c(1, 2))

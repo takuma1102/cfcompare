@@ -1,4 +1,5 @@
 test_that("rmse_curve returns a tidy cf_rmse_curve over the swept dimension", {
+  skip_on_cran()
   cc <- rmse_curve("n_control", values = c(20, 30), n_runs = 2,
                    methods = c("DID", "TROP"), n_pre = 8, n_post = 4,
                    control = trop_control(n_cv_cells = 10L, cv_cycles = 1L),
@@ -11,6 +12,7 @@ test_that("rmse_curve returns a tidy cf_rmse_curve over the swept dimension", {
 })
 
 test_that("rmse_curve can sweep pre-treatment periods", {
+  skip_on_cran()
   cp <- rmse_curve("n_pre", values = c(6, 10), n_runs = 2,
                    methods = c("DID", "TROP"), n_control = 24,
                    control = trop_control(n_cv_cells = 10L, cv_cycles = 1L),
@@ -21,6 +23,7 @@ test_that("rmse_curve can sweep pre-treatment periods", {
 })
 
 test_that("rmse_curves bundles both sweeps", {
+  skip_on_cran()
   g <- rmse_curves(values_control = c(20, 28), values_pre = c(6, 10),
                    n_runs = 2, methods = c("DID", "TROP"),
                    n_control = 24, n_pre = 8, n_post = 4,
@@ -32,6 +35,7 @@ test_that("rmse_curves bundles both sweeps", {
 })
 
 test_that("rmse_curve can sweep the number of treated units", {
+  skip_on_cran()
   cc <- rmse_curve("n_treated", values = c(2, 4), n_runs = 2,
                    methods = c("DID", "TROP"), n_control = 24,
                    n_pre = 8, n_post = 4,
@@ -44,6 +48,7 @@ test_that("rmse_curve can sweep the number of treated units", {
 })
 
 test_that("rmse_curve can sweep the number of post-treatment periods", {
+  skip_on_cran()
   cc <- rmse_curve("n_post", values = c(3, 5), n_runs = 2,
                    methods = c("DID", "TROP"), n_control = 24,
                    n_treated = 4, n_pre = 8,

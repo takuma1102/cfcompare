@@ -74,7 +74,7 @@
 #' @seealso [trop_matrix()], [trop()]
 #' @export
 #' @examples
-#' df <- sim_panel(N = 15, T = 12, n_treated = 3, t0 = 9, att = 2, seed = 1)
+#' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 #' pm <- panel_matrices(df, "y", "w", "id", "t")
 #' str(pm)
 #' # Feed straight into the matrix-in entry point (treated rows/periods inferred).

@@ -83,7 +83,7 @@
 #' @seealso [trop()], [panel_compare()]
 #' @export
 #' @examples
-#' df <- sim_panel(N = 15, T = 12, n_treated = 3, t0 = 9, att = 2, seed = 1)
+#' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 #' Y <- matrix(0, max(df$id), max(df$t)); W <- Y
 #' for (k in seq_len(nrow(df))) { Y[df$id[k], df$t[k]] <- df$y[k]
 #'   W[df$id[k], df$t[k]] <- df$w[k] }

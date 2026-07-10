@@ -47,9 +47,11 @@
 #'   Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.1002/jae.70061}.
 #' @seealso [trop()]; `format()` for paste-ready LaTeX/Markdown output
 #' @examples
-#' df <- sim_panel(N = 30, T = 10, n_treated = 4, t0 = 5, att = 2, seed = 1)
+#' df <- sim_panel(N = 14, T = 8, n_treated = 3, t0 = 5, att = 2, seed = 1)
+#' # fixed base penalties keep the example fast; omit `lambda_full` to select
+#' # them by cross-validation
 #' ab <- trop_ablation(df, "y", "w", "id", "t",
-#'                     control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#'                     lambda_full = list(time = 0.1, unit = 0.5, nn = 2))
 #' ab                                   # clean console table
 #' \donttest{
 #' cat(format(ab, "latex"), sep = "\n") # paste-ready LaTeX (booktabs)
@@ -240,9 +242,9 @@ print.trop_ablation <- function(x, digits = 3, ...) {
 #'   `cat(..., sep = "\n")` or `writeLines()`.
 #' @seealso `trop_ablation()`
 #' @examples
-#' df <- sim_panel(N = 30, T = 10, n_treated = 4, t0 = 5, att = 2, seed = 1)
+#' df <- sim_panel(N = 14, T = 8, n_treated = 3, t0 = 5, att = 2, seed = 1)
 #' ab <- trop_ablation(df, "y", "w", "id", "t",
-#'                     control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#'                     lambda_full = list(time = 0.1, unit = 0.5, nn = 2))
 #' writeLines(format(ab, "markdown"))
 #' @export
 format.trop_ablation <- function(x, output = c("latex", "markdown"),

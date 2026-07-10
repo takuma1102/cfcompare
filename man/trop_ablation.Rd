@@ -95,9 +95,11 @@ paste-ready LaTeX (booktabs) or Markdown. It is also an ordinary
 \code{data.frame}, so it can be passed to \code{knitr::kable()}, \code{gt::gt()}, etc.
 }
 \examples{
-df <- sim_panel(N = 30, T = 10, n_treated = 4, t0 = 5, att = 2, seed = 1)
+df <- sim_panel(N = 14, T = 8, n_treated = 3, t0 = 5, att = 2, seed = 1)
+# fixed base penalties keep the example fast; omit `lambda_full` to select
+# them by cross-validation
 ab <- trop_ablation(df, "y", "w", "id", "t",
-                    control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+                    lambda_full = list(time = 0.1, unit = 0.5, nn = 2))
 ab                                   # clean console table
 \donttest{
 cat(format(ab, "latex"), sep = "\n") # paste-ready LaTeX (booktabs)

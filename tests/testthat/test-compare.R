@@ -3,6 +3,7 @@ schema_cols <- c("method", "estimate", "std.error", "conf.low", "conf.high",
                  "rank", "note")
 
 test_that("panel_compare returns the shared tidy schema", {
+  skip_on_cran()
   df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 4)
   cmp <- panel_compare(df, "y", "w", "id", "t",
                        methods = c("DID", "MC", "TROP"), se = "none",
@@ -16,6 +17,7 @@ test_that("panel_compare returns the shared tidy schema", {
 })
 
 test_that("SDID is skipped gracefully when synthdid is unavailable", {
+  skip_on_cran()
   skip_if(requireNamespace("synthdid", quietly = TRUE),
           "synthdid is installed; skip-path not exercised")
   df <- sim_panel(N = 16, T = 10, n_treated = 3, t0 = 8, seed = 6)
@@ -32,12 +34,14 @@ test_that("SDID is skipped gracefully when synthdid is unavailable", {
 })
 
 test_that("unknown methods raise an informative error", {
+  skip_on_cran()
   df <- sim_panel(N = 12, T = 8, n_treated = 2, t0 = 6, seed = 1)
   expect_error(panel_compare(df, "y", "w", "id", "t", methods = "FOO"),
                "Unknown method")
 })
 
 test_that("as_att coerces trop fits and lists", {
+  skip_on_cran()
   df <- sim_panel(N = 16, T = 10, n_treated = 3, t0 = 8, seed = 8)
   fit <- trop(df, "y", "w", "id", "t", se = "none",
               control = trop_control(n_cv_cells = 15, seed = 1, cv_cycles = 1))

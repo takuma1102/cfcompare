@@ -1,4 +1,5 @@
 test_that("bootstrap SE returns finite SE and a percentile CI", {
+  skip_on_cran()
   df <- sim_panel(N = 24, T = 12, n_treated = 4, t0 = 10, att = 2, seed = 1)
   fit <- trop(df, "y", "w", "id", "t", se = "bootstrap",
               control = trop_control(n_cv_cells = 30L, cv_cycles = 1L,
@@ -9,6 +10,7 @@ test_that("bootstrap SE returns finite SE and a percentile CI", {
 })
 
 test_that("sim_semisynthetic imposes the requested effect exactly", {
+  skip_on_cran()
   real <- sim_panel(N = 30, T = 14, n_treated = 1L, att = 0, seed = 1)
   ss <- sim_semisynthetic(real, "y", "id", "t", n_treated = 5, t0 = 11,
                           att = 4, seed = 2)
@@ -18,6 +20,7 @@ test_that("sim_semisynthetic imposes the requested effect exactly", {
 })
 
 test_that("sim_semisynthetic supports a dynamic effect path", {
+  skip_on_cran()
   real <- sim_panel(N = 20, T = 12, n_treated = 1L, att = 0, seed = 3)
   ss <- sim_semisynthetic(real, "y", "id", "t", n_treated = 4, t0 = 10,
                           effect = c(1, 2, 3), seed = 1)

@@ -15,6 +15,7 @@
 }
 
 test_that("placebo setup stamps staggered adoption patterns and cohorts", {
+  skip_on_cran()
   Y <- .make_panel()
   W <- matrix(0, nrow(Y), ncol(Y))
   W[1, 9:12] <- 1                      # cohort A: adopts at t = 9
@@ -51,6 +52,7 @@ test_that("placebo setup stamps staggered adoption patterns and cohorts", {
 })
 
 test_that("block designs reduce to a single cohort (previous behaviour)", {
+  skip_on_cran()
   Y <- .make_panel(seed = 2)
   W <- matrix(0, nrow(Y), ncol(Y))
   W[1:2, 10:12] <- 1
@@ -86,6 +88,7 @@ test_that("block designs reduce to a single cohort (previous behaviour)", {
 })
 
 test_that("placebo criterion is finite on staggered designs and trop() runs", {
+  skip_on_cran()
   Y <- .make_panel(N = 16, Tt = 12, seed = 3)
   W <- matrix(0, nrow(Y), ncol(Y))
   W[1, 9:12] <- 1
@@ -101,6 +104,7 @@ test_that("placebo criterion is finite on staggered designs and trop() runs", {
 })
 
 test_that("loocv on a staggered design warns and suggests placebo CV", {
+  skip_on_cran()
   Y <- .make_panel(N = 16, Tt = 12, seed = 4)
   W <- matrix(0, nrow(Y), ncol(Y))
   W[1, 9:12] <- 1

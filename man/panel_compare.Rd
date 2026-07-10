@@ -64,11 +64,15 @@ can be routed through \pkg{gsynth}. Methods whose optional package is missing,
 or that do not apply to the design, are skipped with a message.
 }
 \examples{
-df <- sim_panel(N = 25, T = 14, n_treated = 4, t0 = 10, seed = 3)
+\donttest{
+# panel_compare() fits TROP with cross-validated penalties (random held-out
+# cells), so it is wrapped in \donttest to keep R CMD check fast
+df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, seed = 3)
 cmp <- panel_compare(df, "y", "w", "id", "t",
                      methods = c("DID", "MC", "TROP"), se = "none",
-                     control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
+                     control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
 cmp$att
+}
 }
 \seealso{
 \code{\link[=trop]{trop()}}, \code{\link[=autoplot.cf_comparison]{autoplot.cf_comparison()}}, \code{\link[=plot_counterfactual]{plot_counterfactual()}}

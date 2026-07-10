@@ -62,7 +62,7 @@ Athey, Imbens, Qu & Viviano (2026). Pair it with \code{\link[=panel_compare]{pan
 \code{\link[=panel_rmse]{panel_rmse()}} to score estimators against the truth.
 }
 \examples{
-real <- sim_panel(N = 40, T = 18, n_treated = 0L, att = 0, seed = 1)
+real <- sim_panel(N = 16, T = 10, n_treated = 0L, att = 0, seed = 1)
 ss <- sim_semisynthetic(real, "y", "id", "t",
                         n_treated = 6, t0 = 14, att = 3, seed = 2)
 mean(ss$tau[ss$w == 1])   # true ATT = 3

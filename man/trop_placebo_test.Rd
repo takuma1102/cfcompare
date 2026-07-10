@@ -55,10 +55,10 @@ For interval estimates use the bootstrap or jackknife (see \code{\link[=trop]{tr
 }
 \examples{
 \donttest{
-df  <- sim_panel(N = 40, T = 12, n_treated = 5, t0 = 9, att = 3, seed = 1)
+df  <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6, att = 3, seed = 1)
 fit <- trop(df, "y", "w", "id", "t", se = "none",
-            control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
-pt  <- trop_placebo_test(fit, B = 200)
+            control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+pt  <- trop_placebo_test(fit, B = 50)
 pt
 }
 }

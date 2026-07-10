@@ -73,11 +73,11 @@ Viviano (2026). A block treatment is applied to \code{n_treated} units from peri
 \code{t0} onward, with a constant additive effect \code{att}.
 }
 \examples{
-df <- sim_panel(N = 30, T = 15, n_treated = 5, t0 = 11, seed = 42)
+df <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6, seed = 42)
 head(df)
 
 # Two covariates with known coefficients, recoverable by trop(covariates=):
-dc <- sim_panel(N = 30, T = 12, n_treated = 4, t0 = 9,
+dc <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6,
                 n_cov = 2, phi = c(1.2, -0.7), seed = 1)
 attr(dc, "phi")
 }

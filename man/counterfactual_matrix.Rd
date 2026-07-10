@@ -39,9 +39,9 @@ control's untreated outcome is simply its observed value).
 \code{predict_counterfactual()} is an alias for \code{counterfactual_matrix()}.
 }
 \examples{
-df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, seed = 1)
-fit <- trop(df, "y", "w", "id", "t", se = "none",
-            control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
+df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, seed = 1)
+fit <- trop(df, "y", "w", "id", "t",
+            lambda = list(time = 0.1, unit = 0.5, nn = 2), se = "none")
 M <- counterfactual_matrix(fit)
 dim(M)
 }

@@ -28,7 +28,7 @@ estimators are trying to recover. Pair it with \code{\link[=panel_compare]{panel
 hand.
 }
 \examples{
-real <- sim_panel(N = 40, T = 18, n_treated = 0L, att = 0, seed = 1)
+real <- sim_panel(N = 16, T = 10, n_treated = 0L, att = 0, seed = 1)
 ss <- sim_semisynthetic(real, "y", "id", "t",
                         n_treated = 6, t0 = 14, att = 3, seed = 2)
 true_att(ss)   # 3

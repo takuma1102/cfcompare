@@ -24,7 +24,7 @@ on a single axis -- the quick visual comparison this package is built for.
 }
 \examples{
 \donttest{
-df <- sim_panel(seed = 1)
+df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, seed = 1)
 cmp <- panel_compare(df, "y", "w", "id", "t",
                      methods = c("DID", "MC", "TROP"))
 autoplot(cmp)

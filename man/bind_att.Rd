@@ -30,12 +30,12 @@ control of other fields such as \code{outcome}, coerce that object with \code{\l
 first and pass the result in unnamed.
 }
 \examples{
-df <- sim_panel(N = 25, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
-ctrl <- trop_control(n_cv_cells = 8L, cv_cycles = 1L)
+df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
+lam <- list(time = 0.1, unit = 0.5, nn = 2)   # fixed penalties (fast example)
 f_pooled   <- trop(df, "y", "w", "id", "t", anchor = "pooled",
-                   se = "none", control = ctrl)
+                   lambda = lam, se = "none")
 f_per_cell <- trop(df, "y", "w", "id", "t", anchor = "per_cell",
-                   se = "none", control = ctrl)
+                   lambda = lam, se = "none")
 bind_att(pooled = f_pooled, per_cell = f_per_cell)
 }
 \seealso{

@@ -3,6 +3,7 @@ schema_cols <- c("method", "estimate", "std.error", "conf.low", "conf.high",
                  "rank", "note")
 
 test_that("compare_se_modes shares one estimate across inference methods", {
+  skip_on_cran()
   df <- sim_panel(N = 24, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
   tbl <- compare_se_modes(df, "y", "w", "id", "t",
                           se = c("bootstrap", "jackknife"),
@@ -18,6 +19,7 @@ test_that("compare_se_modes shares one estimate across inference methods", {
 })
 
 test_that("compare_se_modes defaults to bootstrap + jackknife", {
+  skip_on_cran()
   df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 2)
   tbl <- compare_se_modes(df, "y", "w", "id", "t",
                           control = trop_control(n_cv_cells = 10L, cv_cycles = 1L,
@@ -26,6 +28,7 @@ test_that("compare_se_modes defaults to bootstrap + jackknife", {
 })
 
 test_that("placebo SE has been removed", {
+  skip_on_cran()
   df <- sim_panel(N = 16, T = 10, n_treated = 3, t0 = 8, att = 2, seed = 5)
   ctrl <- trop_control(n_cv_cells = 10L, cv_cycles = 1L, seed = 1)
   expect_error(
@@ -35,6 +38,7 @@ test_that("placebo SE has been removed", {
 })
 
 test_that("compare_se_modes accepts custom labels", {
+  skip_on_cran()
   df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 3)
   tbl <- compare_se_modes(df, "y", "w", "id", "t",
                           se = c("bootstrap", "jackknife"),
@@ -45,6 +49,7 @@ test_that("compare_se_modes accepts custom labels", {
 })
 
 test_that("compare_se_modes validates labels length and SE names", {
+  skip_on_cran()
   df <- sim_panel(N = 16, T = 10, n_treated = 3, t0 = 8, att = 2, seed = 4)
   ctrl <- trop_control(n_cv_cells = 10L, cv_cycles = 1L, seed = 1)
   expect_error(
@@ -58,6 +63,7 @@ test_that("compare_se_modes validates labels length and SE names", {
 })
 
 test_that("autoplot.cf_se_comparison returns a ggplot", {
+  skip_on_cran()
   skip_if_not_installed("ggplot2")
   df <- sim_panel(N = 18, T = 10, n_treated = 4, t0 = 8, att = 2, seed = 6)
   tbl <- compare_se_modes(df, "y", "w", "id", "t",

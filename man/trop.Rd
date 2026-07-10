@@ -92,9 +92,11 @@ nests DID/TWFE, matrix completion and synthetic-control-type weighting as
 special cases.
 }
 \examples{
-df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, seed = 1)
-fit <- trop(df, "y", "w", "id", "t", se = "none",
-            control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
+df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, seed = 1)
+# fixed penalties keep this example fast and deterministic; omit `lambda`
+# to choose (time, unit, nn) by cross-validation
+fit <- trop(df, "y", "w", "id", "t",
+            lambda = list(time = 0.1, unit = 0.5, nn = 2), se = "none")
 fit
 }
 \references{

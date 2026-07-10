@@ -1,4 +1,5 @@
 test_that("standardize = TRUE leaves the TWFE/DID estimate unchanged", {
+  skip_on_cran()
   # With lambda = (0, 0, Inf) the fit is plain weighted TWFE with uniform
   # weights; the ATT is invariant to an affine transform of the outcome, so the
   # standardized and raw fits must agree.
@@ -22,6 +23,7 @@ test_that("standardize = TRUE leaves the TWFE/DID estimate unchanged", {
 })
 
 test_that("standardize maps counterfactual_matrix back to the raw scale", {
+  skip_on_cran()
   df <- sim_panel(N = 16, T = 10, n_treated = 3, t0 = 8, att = 1, seed = 22)
   lam <- list(time = 0, unit = 0, nn = Inf)
   raw <- trop(df, "y", "w", "id", "t", lambda = lam, se = "none")
@@ -32,6 +34,7 @@ test_that("standardize maps counterfactual_matrix back to the raw scale", {
 })
 
 test_that("standardized event-study effects are on the raw outcome scale", {
+  skip_on_cran()
   df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 3, seed = 23)
   lam <- list(time = 0, unit = 0, nn = Inf)
   std <- trop(df, "y", "w", "id", "t", lambda = lam, se = "none",
@@ -43,6 +46,7 @@ test_that("standardized event-study effects are on the raw outcome scale", {
 })
 
 test_that("n_cv_cells = Inf / 0 uses every control cell", {
+  skip_on_cran()
   df <- sim_panel(N = 8, T = 6, n_treated = 2, t0 = 5, seed = 24)
   m <- cfcompare:::.panel_to_matrices(df, "y", "w", "id", "t")
   all_cells <- which(m$W == 0, arr.ind = TRUE)

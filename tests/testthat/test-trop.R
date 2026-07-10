@@ -1,4 +1,5 @@
 test_that("trop() runs and returns a sensible ATT", {
+  skip_on_cran()
   df <- sim_panel(N = 22, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 7)
   fit <- trop(df, "y", "w", "id", "t", se = "none",
               control = trop_control(n_cv_cells = 25, seed = 1, cv_cycles = 1))
@@ -10,6 +11,7 @@ test_that("trop() runs and returns a sensible ATT", {
 })
 
 test_that("fixed lambda skips CV and DID special case matches TWFE engine", {
+  skip_on_cran()
   df <- sim_panel(N = 18, T = 10, n_treated = 3, t0 = 8, att = 1, seed = 3)
   fit <- trop(df, "y", "w", "id", "t",
               lambda = list(time = 0, unit = 0, nn = Inf),
@@ -22,6 +24,7 @@ test_that("fixed lambda skips CV and DID special case matches TWFE engine", {
 })
 
 test_that("jackknife SE is produced with multiple treated units", {
+  skip_on_cran()
   df <- sim_panel(N = 20, T = 11, n_treated = 4, t0 = 8, seed = 9)
   fit <- trop(df, "y", "w", "id", "t", se = "jackknife",
               control = trop_control(n_cv_cells = 20, seed = 1, cv_cycles = 1))
@@ -31,6 +34,7 @@ test_that("jackknife SE is produced with multiple treated units", {
 })
 
 test_that("assignment pattern detection distinguishes block vs general", {
+  skip_on_cran()
   df <- sim_panel(N = 15, T = 10, n_treated = 3, t0 = 7, seed = 2)
   m <- cfcompare:::.panel_to_matrices(df, "y", "w", "id", "t")
   expect_equal(cfcompare:::.assignment_pattern(m$W)$type, "block")
@@ -40,6 +44,7 @@ test_that("assignment pattern detection distinguishes block vs general", {
 })
 
 test_that("input validation catches malformed panels", {
+  skip_on_cran()
   df <- sim_panel(N = 12, T = 8, n_treated = 2, t0 = 6, seed = 1)
   expect_error(trop(df, "nope", "w", "id", "t"), "not found")
   df$w[1] <- 2

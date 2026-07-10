@@ -32,7 +32,7 @@
 #' @return A \pkg{ggplot2} object.
 #' @examples
 #' \donttest{
-#' df <- sim_panel(seed = 1)
+#' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, seed = 1)
 #' cmp <- panel_compare(df, "y", "w", "id", "t",
 #'                      methods = c("DID", "MC", "TROP"))
 #' autoplot(cmp)
@@ -56,9 +56,11 @@ autoplot.cf_att_tbl <- function(object, ...) {
     ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
                         colour = "grey60")
   if (has_ci) {
-    p <- p + ggplot2::geom_errorbarh(
+    # horizontal errorbar via orientation = "y" (ggplot2 >= 3.3.0);
+    # geom_errorbarh() was deprecated in ggplot2 4.0.0
+    p <- p + ggplot2::geom_errorbar(
       ggplot2::aes(xmin = .data$conf.low, xmax = .data$conf.high),
-      height = 0.18, na.rm = TRUE)
+      width = 0.18, orientation = "y", na.rm = TRUE)
   }
   p +
     ggplot2::geom_point(size = 2.8) +
@@ -154,9 +156,9 @@ plot_counterfactual <- function(x, methods = NULL) {
 #' @export
 #' @examples
 #' \donttest{
-#' df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 3, seed = 1)
+#' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 3, seed = 1)
 #' autoplot(trop(df, "y", "w", "id", "t",
-#'               control = trop_control(n_cv_cells = 8L, cv_cycles = 1L)))
+#'               control = trop_control(n_cv_cells = 5L, cv_cycles = 1L)))
 #' }
 autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
   .need_ggplot()
@@ -279,11 +281,11 @@ plot.trop <- function(x, ...) {
 #' @export
 #' @examples
 #' \donttest{
-#' df  <- sim_panel(N = 24, T = 12, n_treated = 6, t0 = 8, att = 3, seed = 1)
+#' df  <- sim_panel(N = 16, T = 9, n_treated = 4, t0 = 6, att = 3, seed = 1)
 #' fit <- trop(df, "y", "w", "id", "t",
-#'             control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#'             control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
 #' autoplot(trop_event_study(fit, se = "bootstrap",
-#'                           control = trop_control(n_boot = 100L, seed = 1)))
+#'                           control = trop_control(n_boot = 20L, seed = 1)))
 #' }
 autoplot.trop_event_study <- function(object, ...) {
   .need_ggplot()

@@ -24,10 +24,10 @@ of the subtitle.
 }
 \examples{
 \donttest{
-df  <- sim_panel(N = 24, T = 12, n_treated = 6, t0 = 8, att = 3, seed = 1)
+df  <- sim_panel(N = 16, T = 9, n_treated = 4, t0 = 6, att = 3, seed = 1)
 fit <- trop(df, "y", "w", "id", "t",
-            control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+            control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
 autoplot(trop_event_study(fit, se = "bootstrap",
-                          control = trop_control(n_boot = 100L, seed = 1)))
+                          control = trop_control(n_boot = 20L, seed = 1)))
 }
 }

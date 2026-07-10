@@ -1,4 +1,5 @@
 test_that("panel_rmse returns a ranked tidy table for native methods", {
+  skip_on_cran()
   df <- sim_panel(N = 24, T = 12, n_treated = 3, t0 = 10, rank = 2,
                   att = 2, noise = 1, seed = 2)
   r <- panel_rmse(df, "y", "w", "id", "t",
@@ -14,6 +15,7 @@ test_that("panel_rmse returns a ranked tidy table for native methods", {
 })
 
 test_that("panel_rmse skips wrapped methods gracefully when unavailable", {
+  skip_on_cran()
   skip_if(requireNamespace("synthdid", quietly = TRUE),
           "synthdid is installed; skip-path not exercised")
   df <- sim_panel(N = 20, T = 12, n_treated = 3, t0 = 10, seed = 3)
@@ -28,6 +30,7 @@ test_that("panel_rmse skips wrapped methods gracefully when unavailable", {
 })
 
 test_that("panel_rmse validates horizon and pseudo count", {
+  skip_on_cran()
   df <- sim_panel(N = 12, T = 10, n_treated = 2, t0 = 8, seed = 1)
   expect_error(panel_rmse(df, "y", "w", "id", "t", horizon = 10))
   expect_error(panel_rmse(df, "y", "w", "id", "t", n_pseudo = 50,

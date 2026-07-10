@@ -6,6 +6,7 @@ fit_for <- function(att, seed) {
 }
 
 test_that("trop_placebo_test returns the expected structure", {
+  skip_on_cran()
   pt <- trop_placebo_test(fit_for(3, 1), B = 60,
                           control = trop_control(n_cv_cells = 10L, cv_cycles = 1L,
                                                  seed = 1))
@@ -19,6 +20,7 @@ test_that("trop_placebo_test returns the expected structure", {
 })
 
 test_that("a clear effect is far from the placebo null", {
+  skip_on_cran()
   pt <- trop_placebo_test(fit_for(4, 2), B = 100,
                           control = trop_control(n_cv_cells = 10L, cv_cycles = 1L,
                                                  seed = 1))
@@ -27,6 +29,7 @@ test_that("a clear effect is far from the placebo null", {
 })
 
 test_that("alternatives run and the null distribution is centred near zero", {
+  skip_on_cran()
   pt <- trop_placebo_test(fit_for(3, 3), B = 80, alternative = "greater",
                           control = trop_control(n_cv_cells = 10L, cv_cycles = 1L,
                                                  seed = 1))
@@ -35,6 +38,7 @@ test_that("alternatives run and the null distribution is centred near zero", {
 })
 
 test_that("trop_placebo_test validates its input", {
+  skip_on_cran()
   expect_error(trop_placebo_test(list(), B = 10), "trop")
   # too few controls for the number of treated units
   df <- sim_panel(N = 6, T = 10, n_treated = 5, t0 = 7, att = 2, seed = 9)
@@ -44,6 +48,7 @@ test_that("trop_placebo_test validates its input", {
 })
 
 test_that("autoplot.trop_placebo_test returns a ggplot", {
+  skip_on_cran()
   skip_if_not_installed("ggplot2")
   pt <- trop_placebo_test(fit_for(3, 4), B = 40,
                           control = trop_control(n_cv_cells = 10L, cv_cycles = 1L,

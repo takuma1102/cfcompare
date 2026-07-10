@@ -60,15 +60,15 @@ of resampling scheme --- it is an \emph{inference-mode} comparison, not an
 estimator comparison, so all rows share one point estimate by construction.
 }
 \examples{
-df <- sim_panel(N = 24, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
+df <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 \donttest{
 compare_se_modes(df, "y", "w", "id", "t",
-                 control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+                 control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
 
 # Fix the penalties (skip cross-validation), as with trop()'s `lambda`:
 compare_se_modes(df, "y", "w", "id", "t",
                  lambda = list(time = 0, unit = 0, nn = Inf),
-                 control = trop_control(n_boot = 50L))
+                 control = trop_control(n_boot = 20L))
 }
 }
 \seealso{

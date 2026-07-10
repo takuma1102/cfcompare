@@ -84,11 +84,11 @@ note when their package is missing or the design does not apply.
 }
 \examples{
 \donttest{
-df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
+df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 r <- panel_rmse(df, "y", "w", "id", "t",
                 methods = c("DID", "TROP"),
                 horizon = 2, n_pseudo = 3, n_runs = 2,
-                control = trop_control(n_cv_cells = 8L, cv_cycles = 1L),
+                control = trop_control(n_cv_cells = 5L, cv_cycles = 1L),
                 seed = 1)
 r
 autoplot(r)

@@ -38,15 +38,15 @@
 #'   and an explanatory `note`.
 #' @seealso [trop()], [trop_ablation()], [bind_att()]
 #' @examples
-#' df <- sim_panel(N = 24, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 1)
+#' df <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 #' \donttest{
 #' compare_se_modes(df, "y", "w", "id", "t",
-#'                  control = trop_control(n_cv_cells = 10L, cv_cycles = 1L))
+#'                  control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
 #'
 #' # Fix the penalties (skip cross-validation), as with trop()'s `lambda`:
 #' compare_se_modes(df, "y", "w", "id", "t",
 #'                  lambda = list(time = 0, unit = 0, nn = Inf),
-#'                  control = trop_control(n_boot = 50L))
+#'                  control = trop_control(n_boot = 20L))
 #' }
 #' @export
 compare_se_modes <- function(data, outcome, treatment, unit, time,
@@ -129,9 +129,11 @@ autoplot.cf_se_comparison <- function(object, ...) {
   p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$estimate, y = .data$method)) +
     ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "grey55")
   if (has_ci) {
-    p <- p + ggplot2::geom_errorbarh(
+    # horizontal errorbar via orientation = "y" (ggplot2 >= 3.3.0);
+    # geom_errorbarh() was deprecated in ggplot2 4.0.0
+    p <- p + ggplot2::geom_errorbar(
       ggplot2::aes(xmin = .data$conf.low, xmax = .data$conf.high),
-      height = 0.16, na.rm = TRUE)
+      width = 0.16, orientation = "y", na.rm = TRUE)
   }
   # Subtitle reports the bootstrap replication count, mirroring the "<n> reps"
   # style of the package's other autoplots (autoplot.cf_rmse_curve()'s Monte

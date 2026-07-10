@@ -109,9 +109,9 @@ and call \code{\link[=panel_compare]{panel_compare()}} in a loop.
 \examples{
 \donttest{
 # quick look (small grid + few reps); raise n_runs/values for paper quality
-cc <- rmse_curve("n_control", values = c(30, 50), n_runs = 2,
+cc <- rmse_curve("n_control", values = c(12, 16), n_runs = 2, n_pre = 6, n_post = 3,
                  methods = c("DID", "TROP"),
-                 control = trop_control(n_cv_cells = 8L, cv_cycles = 1L))
+                 control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
 autoplot(cc)
 }
 }

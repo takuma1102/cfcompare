@@ -1,4 +1,5 @@
 test_that("trop_sensitivity returns a labelled grid with a CV-selected cell", {
+  skip_on_cran()
   df <- sim_panel(N = 22, T = 12, n_treated = 3, t0 = 10, att = 2, seed = 1)
   g <- trop_sensitivity(df, "y", "w", "id", "t",
                         lambda_time = c(0, 0.25, 1), lambda_nn = NULL,

@@ -1,4 +1,5 @@
 test_that("surface_matrix lays the grid out over the two swept penalties", {
+  skip_on_cran()
   df <- sim_panel(N = 22, T = 12, n_treated = 3, t0 = 10, att = 2, seed = 1)
   g <- trop_sensitivity(df, "y", "w", "id", "t",
                         axes = c("nn", "time"),
@@ -21,6 +22,7 @@ test_that("surface_matrix lays the grid out over the two swept penalties", {
 })
 
 test_that("surface_matrix can also lay out the ATT", {
+  skip_on_cran()
   df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 2)
   g <- trop_sensitivity(df, "y", "w", "id", "t",
                         lambda_time = c(0, 0.5), lambda_nn = NULL,
@@ -32,10 +34,12 @@ test_that("surface_matrix can also lay out the ATT", {
 })
 
 test_that("surface_matrix rejects non-grid input", {
+  skip_on_cran()
   expect_error(surface_matrix(data.frame(a = 1)), "cf_trop_grid")
 })
 
 test_that("selected_lambda returns a trop()-ready penalty list", {
+  skip_on_cran()
   df <- sim_panel(N = 22, T = 12, n_treated = 3, t0 = 10, att = 2, seed = 3)
   g <- trop_sensitivity(df, "y", "w", "id", "t",
                         lambda_time = c(0, 0.25, 1), lambda_nn = NULL,

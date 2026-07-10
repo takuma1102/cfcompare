@@ -5,6 +5,7 @@ make_ab <- function(se = "none") {
 }
 
 test_that("trop_ablation returns the six-spec table", {
+  skip_on_cran()
   ab <- make_ab()
   expect_s3_class(ab, "trop_ablation")
   expect_equal(nrow(ab), 6L)
@@ -15,6 +16,7 @@ test_that("trop_ablation returns the six-spec table", {
 })
 
 test_that("format() yields markdown and latex", {
+  skip_on_cran()
   ab <- make_ab()
   md <- format(ab, "markdown")
   expect_true(any(grepl("Specification", md)))
@@ -23,6 +25,7 @@ test_that("format() yields markdown and latex", {
 })
 
 test_that("plot() writes a PNG figure", {
+  skip_on_cran()
   ab <- make_ab()
   f <- tempfile(fileext = ".png")
   on.exit(unlink(f), add = TRUE)
@@ -33,6 +36,7 @@ test_that("plot() writes a PNG figure", {
 })
 
 test_that("plot() writes a PDF and appends .png when no extension is given", {
+  skip_on_cran()
   ab <- make_ab("jackknife")             # exercises the SE/CI columns too
   fp <- tempfile(fileext = ".pdf")
   fn <- tempfile()                        # no extension
@@ -44,6 +48,7 @@ test_that("plot() writes a PDF and appends .png when no extension is given", {
 })
 
 test_that("plot() renders to the active device and rejects other formats", {
+  skip_on_cran()
   ab <- make_ab()
   grDevices::pdf(NULL)
   on.exit(grDevices::dev.off(), add = TRUE)
@@ -52,6 +57,7 @@ test_that("plot() renders to the active device and rejects other formats", {
 })
 
 test_that("rmse = TRUE adds a Table-5-style relative RMSE", {
+  skip_on_cran()
   df <- sim_panel(N = 40, T = 12, n_treated = 5, t0 = 9, rank = 3, att = 3,
                   noise = 1, seed = 1)
   ab <- trop_ablation(df, "y", "w", "id", "t",
@@ -68,6 +74,7 @@ test_that("rmse = TRUE adds a Table-5-style relative RMSE", {
 })
 
 test_that("plot() works in RMSE mode", {
+  skip_on_cran()
   df <- sim_panel(N = 36, T = 12, n_treated = 4, t0 = 9, att = 2, seed = 2)
   ab <- trop_ablation(df, "y", "w", "id", "t",
                       control = trop_control(n_cv_cells = 10L, cv_cycles = 1L,
