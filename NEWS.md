@@ -1,4 +1,4 @@
-# cfcompare 0.1.0.9005
+# cfcompare 0.1.0.9006
 
 * Native R implementations of the Triply
   RObust Panel (TROP) estimator of Athey, Imbens, Qu & Viviano (2026).
