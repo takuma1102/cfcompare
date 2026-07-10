@@ -71,10 +71,17 @@ test_that("block designs reduce to a single cohort (previous behaviour)", {
   expect_length(q$warm, length(pb$draws))
   expect_length(q$warm[[1L]], 1L)
 
-  # warm-started re-evaluation at a weaker penalty agrees with a cold start
+  # warm-started re-evaluation at a weaker penalty agrees with a cold start.
+  # The program is convex, so warm starts change only the iteration count, not
+  # the solution -- but only up to the solver's stopping tolerance: at the
+  # default tol the warm and cold iterates stop ~1e-4 (relative) apart, which a
+  # 1e-6 comparison would flag. Solve the two evaluations to a tight tolerance
+  # so the criterion gap (which scales with tol) sits well below the 1e-6
+  # comparison level.
+  ctrl_tight <- cfcompare::trop_control(n_placebo = 4L, seed = 7L, tol = 1e-10)
   lam2 <- list(time = 0.1, unit = 0.1, nn = 5)
-  q_warm <- cfcompare:::.trop_cv_Q_placebo(pb, lam2, ctrl, warm = q$warm)
-  q_cold <- cfcompare:::.trop_cv_Q_placebo(pb, lam2, ctrl)
+  q_warm <- cfcompare:::.trop_cv_Q_placebo(pb, lam2, ctrl_tight, warm = q$warm)
+  q_cold <- cfcompare:::.trop_cv_Q_placebo(pb, lam2, ctrl_tight)
   expect_equal(q_warm$Q, q_cold$Q, tolerance = 1e-6)
 })
 
