@@ -2,6 +2,11 @@ url: https://takuma1102.github.io/cfcompare/
 
 template:
   bootstrap: 5
+  # Preview card used when a page is shared (and by some search features).
+  opengraph:
+    image:
+      src: man/figures/compare_forest.png
+      alt: "Forest plot comparing ATT estimates from TROP, DID, SC, SDID and MC"
   bslib:
     primary: "#08519C"
     base_font: {google: "Inter"}
@@ -33,6 +38,13 @@ navbar:
       aria-label: GitHub
 
 home:
+  # Title and description shown in search results for the home page
+  # (instead of the package Title / long Description from DESCRIPTION).
+  title: "Triply Robust Panel (TROP) Estimator in R"
+  description: >-
+    R package for the Triply Robust Panel (TROP) estimator of Athey, Imbens,
+    Qu and Viviano (2026), with DID, synthetic control, SDID and matrix
+    completion on one panel.
   links:
     - text: TROP paper (Journal of Applied Econometrics)
       href: https://doi.org/10.1002/jae.70061
