@@ -1,0 +1,167 @@
+---
+title: "TROP implementations compared: the paper, Python, Stata and R"
+description: >
+  How the TROP paper, the official Python package, the official Stata command
+  and cfcompare handle the main implementation choices, and how that has
+  changed across releases.
+---
+
+The Triply RObust Panel (TROP) estimator of
+[Athey, Imbens, Qu and Viviano (2026)](https://doi.org/10.1002/jae.70061) is
+available in four places:
+
+- **The paper**, which defines the estimator, its weights and its
+  leave-one-out cross-validation.
+- **Python**: the official [`trop`](https://pypi.org/project/trop/) package
+  ([zhaonanq/TROP-Estimator](https://github.com/zhaonanq/TROP-Estimator)).
+- **Stata**: the official `trop` command
+  ([justinwaddy/TROP](https://github.com/justinwaddy/TROP)).
+- **R**: this package, `cfcompare`, an independent implementation that is not
+  affiliated with the authors of the paper.
+
+The implementations make different choices where the paper leaves room (how
+weights are anchored when many cells are treated, how penalties are
+cross-validated, how inference is done), and those choices change between
+releases. This page records them as **dated snapshots**: each table describes
+the four implementations as they stood at that date, and older snapshots are
+kept unchanged so that the evolution stays visible. Jump to the
+[latest snapshot](#as-of-october-2026).
+
+## As of July 2026
+
+Python `trop` v0.1.9, Stata `trop` v0.2.5, cfcompare 0.1.0.9006.
+
+::: {.comparison-table}
+
+|  | TROP Paper | Python | Stata | R (cfcompare)  |
+|:--|:--|:--|:--|:--|
+| **Solver** | Silent | CVXPY using SCS or OSQP | FISTA (accelerated proximal gradient) | Soft-impute-style proximal gradient (base R only)|
+| **Weight anchoring** | Per-cell  | Pooled only | Pooled (default) and per-cell (option) | Auto (choosing per-cell or pooled by treated-cell count) by default; per-cell and pooled as options |
+| **CV criterion** | LOOCV | Placebo resampling (default) and k-fold (option) | Placebo resampling (default) and k-fold (option) for pooled; LOOCV for per-cell | LOOCV (default) and placebo resampling (option) |
+| **Placebo pattern for staggered treatment** | N/A (LOOCV) | Common block | Actual per-unit patterns | Actual per-unit patterns; warning under LOOCV + staggered |
+| **Outcome pre-processing** | Raw Y | Raw Y | Standardized (default) and raw Y (option) | Raw Y (default) and standardized (option) |
+| **Covariates** | Yes | No | No | Yes |
+| **Inference** | Bootstrap | None | Bootstrap | Bootstrap or jackknife (when available) |
+
+:::
+
+## What changed between July and October 2026
+
+**Python `trop`**
+
+- v0.1.10 (July 2026): Monte Carlo simulation tools that generate panels from
+  features of a real dataset, to compare estimators; the estimator objective
+  rewritten with `cvxpy.sum_squares`.
+- v0.1.11 (September 2026): unit-level bootstrap inference, `trop.bootstrap`
+  (controls-only resampling by default, or stratified). The repository moved to
+  [zhaonanq/TROP-Estimator](https://github.com/zhaonanq/TROP-Estimator).
+
+**Stata `trop`**
+
+- v0.2.6 (August 2026): in the pooled `group(time)` mode, unit distances now
+  mask the other treated units and the target periods; new
+  `pooled_treat_distance(unit() time())` option to override a group's distance
+  to itself.
+- v0.2.7 (August 2026): adaptive cross-validation search, `vce(jackknife)`,
+  progress bars.
+- v0.2.8 (August 2026): the adaptive search starts with a sweep of the full
+  grids.
+- v0.2.9 (September 2026): in `group(time)`, the treated units are masked from
+  the fit and the effect is estimated from the residual.
+
+**cfcompare**
+
+- 0.2.0 (October 2026): pooled anchoring per *treatment spell* (Stata's
+  `group(time)` estimands, with per-spell effects in `fit$tau_groups`); pooled
+  time weights centred on the spell midpoint; `pooled_treat_distance`;
+  controls-only bootstrap resampling; delete-one-unit jackknife over every
+  unit. See the [changelog](../news/index.html) for details.
+- 0.2.1 (October 2026): this website; the comparison tables moved here from
+  the README.
+
+## As of October 2026
+
+Python `trop` v0.1.11, Stata `trop` v0.2.9, cfcompare 0.2.1.
+
+::: {.comparison-table}
+
+|  | TROP Paper | Python (v0.1.11) | Stata (v0.2.9) | R (cfcompare 0.2.1) |
+|:--|:--|:--|:--|:--|
+| **Solver** | Silent | CVXPY (SCS for finite `lambda_nn`, OSQP for `lambda_nn = Inf`), `sum_squares` formulation | FISTA (accelerated proximal gradient with adaptive restart), warm-start nuclear path | Soft-impute-style proximal gradient (base R only; optional truncated SVD via `RSpectra`), warm-start nuclear path |
+| **Estimands / weight anchoring** | Per-cell | Pooled only, over a single trailing block (`treated_periods`) | `group(time)` (default): one pooled estimand per *treatment spell* (same start and end, pooled across units), cell-weighted average; `group(cell)`: per-cell | Auto (per-cell when at most `max_cells` treated cells, else pooled) by default; `anchor = "per_cell"` or `"pooled"` (per treatment spell, as Stata's `group(time)`; per-spell effects in `fit$tau_groups`) |
+| **Pooled unit distance** | N/A (per-cell eq. (3)) | RMS distance to the average treated path over the pre-periods | RMS distance to the group's average path over the periods in which no group member is treated; each comparison unit's own treated cells masked (v0.2.6) | Same as Stata; identical to Python on a block design |
+| **Pooled time-weight centre** | N/A (per-cell `abs(t - s)`) | `T - tp/2` (half a period after the block midpoint) | Spell midpoint `(first + last)/2` (v0.2.4) | Spell midpoint by default; `trop_control(time_center = "python")` reproduces the Python convention, which `trop_matrix()` always uses |
+| **Own-group distance** | N/A | Treated units compared with their own average (non-zero in general) | Same; `pooled_treat_distance(unit(#) time(#))` overrides the members' unit distance and the in-spell time distance (v0.2.6) | Same; `trop_control(pooled_treat_distance = list(unit =, time =))` |
+| **Units with no usable comparison period** | Undefined (0/0) | Not applicable (block design: every unit shares the pre-periods) | Unit weight set to 0 when `lambda_unit > 0` (included when `lambda_unit = 0`) | Largest finite distance (smallest positive weight) |
+| **Other treated cells in the fit** | Excluded | Excluded (block design) | Excluded; tau is the mean residual over the target cells (v0.2.9) | Excluded; tau is the mean residual over the target cells |
+| **CV criterion** | LOOCV | Placebo resampling (default), k-fold; cycle, joint or adaptive search | Placebo resampling (default) or k-fold for `group(time)`; LOOCV for `group(cell)`; cycle, joint or adaptive search | LOOCV (default) or placebo resampling (`cv_method = "placebo"`); coordinate-descent (cycle) search |
+| **Placebo pattern for staggered / general treatment** | N/A (LOOCV) | Common trailing block | Actual per-unit patterns, grouped by treatment spell | Actual per-unit patterns, grouped by treatment spell; warning under LOOCV + staggered |
+| **Outcome pre-processing** | Raw Y | Raw Y | Standardized (always); lambdas on the standardized scale | Raw Y (default) and standardized (`standardize = TRUE`) |
+| **Covariates** | Yes | No | No | Yes |
+| **Bootstrap** | Stratified block bootstrap | `trop.bootstrap`: unit-level bootstrap, controls-only resampling (default) or stratified; percentile CI | `vce(bootstrap)`: stratified block bootstrap; percentile CI (no inference by default) | `se = "bootstrap"` (default): stratified (default) or controls-only (`boot_resample = "controls"`); percentile or normal CI |
+| **Jackknife** | -- | -- | `vce(jackknife)`: delete-one-unit over every unit | `se = "jackknife"`: delete-one-unit over every unit (replicates that leave no treated unit are skipped) |
+
+:::
+
+## Numerical agreement with the official Python package
+
+The TROP engine in cfcompare is written in base R. For correctness checks it
+has been compared with the official Python `trop` package on exactly
+comparable weighted-TWFE sample datasets, using `trop_control(svd = "full")`,
+and the results agree to numerical tolerance. The matrix-in entry point
+`trop_matrix()` keeps the Python package's signature and conventions for such
+cross-checks.
+
+## Notes on cfcompare's implementation choices
+
+**Solver.** Finite nuclear-norm penalties are solved with a proximal-gradient
+soft-impute routine, as opposed to FISTA or SCS, so that the implementation
+depends only on base R; exact digits therefore need not match convex-solver
+implementations. To reconcile the difference, fix the penalties via
+`lambda = list(time =, unit =, nn =)` (bypassing cross-validation), set
+`trop_control(svd = "full")`, and match the other implementation's anchoring.
+
+**Cross-validation.** Penalties are chosen by leave-one-control-cell-out
+prediction error by default (the paper's criterion); a placebo criterion that
+resamples the actual treatment patterns is available via
+`trop_control(cv_method = "placebo")`, and is the recommended choice under
+staggered adoption.
+
+**Per-cell or pooled anchoring.** `anchor = "per_cell"` solves a separate
+locally weighted problem for each treated cell. `anchor = "pooled"` uses one
+set of weights per *treatment spell group* -- treated cells with the same
+start and end period, pooled across units, the `group(time)` estimands of the
+Stata command -- and is faster. Under block adoption there is one group; under
+staggered adoption one per cohort; a unit that switches in and out of
+treatment contributes one group per spell. A group's unit distance is to the
+average path of its units over the periods in which none of them is treated,
+each comparison unit's own treated cells are masked, and the time weights are
+centred on the spell midpoint. The per-group effects are returned in
+`fit$tau_groups`, and the ATT is their cell-weighted average.
+`trop_control(pooled_treat_distance = list(unit = 0, time = 0))` gives the
+group's own units and periods the full weight (the Stata command's
+`pooled_treat_distance()`). `trop_matrix()` is always pooled over a single
+trailing block (the Python signature).
+
+**Covariates.** Time-varying covariates can be supplied to `trop()` and
+`panel_compare()`; they enter the low-rank term additively, as in Section 6.2
+of the paper.
+
+**Nuclear-norm floor.** For numerical stability, the solver adds a small
+scale-relative floor to every finite `lambda_nn` by default (the reported
+`lambda_nn` does not include it). `lambda_nn = Inf` (the DID/TWFE-like case) is
+never affected, and `trop_control(nn_floor = 0)` applies the penalties exactly
+as supplied.
+
+**Standardization.** Estimation uses the raw outcome by default, so `lambda`
+values are on the outcome's natural scale; `trop(standardize = TRUE)`
+standardizes the outcome as the Stata command does, and then reports `lambda`
+on the standardized scale.
+
+**Inference.** `se = "bootstrap"` resamples units with replacement, keeping
+each unit's full time series: treated and control units separately by default
+(the stratified block bootstrap of the paper and of the Stata command), or only
+the control units with `trop_control(boot_resample = "controls")` (the default
+of the Python package's `trop.bootstrap`). `se = "jackknife"` deletes one unit
+at a time over every unit, as the Stata command's `vce(jackknife)`; replicates
+that leave no treated unit are skipped.

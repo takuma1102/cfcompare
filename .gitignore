@@ -40,3 +40,6 @@ HANDOVER.md
 # --- patches (local only, never commit) ---
 *.patch
 *.diff
+
+# --- pkgdown site (built by CI into the gh-pages branch) ---
+docs/

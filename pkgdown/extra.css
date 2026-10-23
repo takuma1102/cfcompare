@@ -1,0 +1,67 @@
+/* ---------------------------------------------------------------------------
+   Frame the model figures.
+
+   On GitHub the README renders on a dark background, so the package's
+   white-background plots stand out on their own. On the pkgdown site the page
+   background is white, so those same figures blend into the page. Give every
+   PNG figure a light frame + shadow so it reads clearly as a figure.
+   Repository badges are SVG (or extension-less badge URLs), so they are left
+   untouched.
+   --------------------------------------------------------------------------- */
+img[src$=".png"] {
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+  background-color: #ffffff;
+  padding: 6px;
+  box-sizing: border-box;
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Comparison tables (articles/implementation-comparison.html).
+
+   The paper / Python / Stata / R tables have five text-heavy columns; a
+   slightly smaller type size and a bold row-label column keep them readable
+   within the text column. On phones the wrapper scrolls horizontally instead
+   of squashing the columns.
+   --------------------------------------------------------------------------- */
+.comparison-table {
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+}
+.comparison-table table {
+  font-size: 0.84rem;
+}
+@media (max-width: 767.98px) {
+  .comparison-table table {
+    min-width: 720px;
+  }
+}
+.comparison-table th,
+.comparison-table td {
+  vertical-align: top;
+}
+.comparison-table td:first-child {
+  width: 16%;
+  font-weight: 600;
+}
+.comparison-table code {
+  font-size: 0.8rem;
+  white-space: normal;
+  /* long calls such as trop_control(pooled_treat_distance = ...) must be
+     allowed to wrap, or they push the R column off the page */
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------------------
+   README tables on the home page: scroll sideways on phones rather than
+   widening the whole page.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  main table {
+    display: block;
+    overflow-x: auto;
+  }
+}

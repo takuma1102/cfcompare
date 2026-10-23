@@ -1,6 +1,6 @@
 Package: cfcompare
 Title: Compare DID, SDID, Matrix Completion and the Triply Robust Panel Estimator
-Version: 0.2.0
+Version: 0.2.1
 Authors@R:
     person("Takuma", "Iwasaki", email = "iwasakit@stanford.edu",
            role = c("aut", "cre", "cph"))
@@ -42,7 +42,8 @@ Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown
-URL: https://github.com/takuma1102/cfcompare
+URL: https://github.com/takuma1102/cfcompare,
+    https://takuma1102.github.io/cfcompare/
 BugReports: https://github.com/takuma1102/cfcompare/issues
 VignetteBuilder: knitr
 Config/testthat/edition: 3

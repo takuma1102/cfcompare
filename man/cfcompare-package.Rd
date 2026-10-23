@@ -32,6 +32,7 @@ Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.
 Useful links:
 \itemize{
   \item \url{https://github.com/takuma1102/cfcompare}
+  \item \url{https://takuma1102.github.io/cfcompare/}
   \item Report bugs at \url{https://github.com/takuma1102/cfcompare/issues}
 }
 

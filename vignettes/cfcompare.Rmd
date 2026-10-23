@@ -381,9 +381,10 @@ larger panels (both via `trop_control()`):
   `RSpectra` when it is installed (and falling back to the full base-R `svd()`
   otherwise). The TROP paper explicitly permits a truncated decomposition for the
   low-rank step, and it matches the full SVD to numerical tolerance. Pass
-  `svd = "full"` to force the exact full decomposition; that is what the README's
-  numerical-agreement checks against the official Python package use, so the
-  comparison is exact rather than up to truncation tolerance.
+  `svd = "full"` to force the exact full decomposition; that is what the
+  numerical-agreement checks against the official Python package use (see
+  [TROP implementations compared](https://takuma1102.github.io/cfcompare/articles/implementation-comparison.html)), so the comparison is exact rather
+  than up to truncation tolerance.
 * **`workers`** --- the bootstrap and jackknife standard errors, the
   cross-validation cells, and the `panel_rmse()` placebo runs are run in parallel
   when `workers > 1` (using `future.apply` / `future`, if installed). Estimates

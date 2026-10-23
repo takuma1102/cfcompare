@@ -1,0 +1,112 @@
+url: https://takuma1102.github.io/cfcompare/
+
+template:
+  bootstrap: 5
+  bslib:
+    primary: "#08519C"
+    base_font: {google: "Inter"}
+    heading_font: {google: "Inter"}
+    code_font: {google: "JetBrains Mono"}
+
+navbar:
+  type: default
+  structure:
+    left:  [intro, articles, reference, news]
+    right: [search, github]
+  components:
+    intro:
+      text: Get started
+      href: articles/cfcompare.html
+    articles:
+      text: Articles
+      menu:
+        - text: Comparing panel estimators with cfcompare
+          href: articles/cfcompare.html
+        - text: "TROP implementations compared: paper, Python, Stata and R"
+          href: articles/implementation-comparison.html
+    reference:
+      text: Reference
+      href: reference/index.html
+    github:
+      icon: fa-github fa-lg
+      href: https://github.com/takuma1102/cfcompare
+      aria-label: GitHub
+
+home:
+  links:
+    - text: TROP paper (Journal of Applied Econometrics)
+      href: https://doi.org/10.1002/jae.70061
+
+articles:
+  - title: Articles
+    navbar: ~
+    contents:
+      - cfcompare
+      - articles/implementation-comparison
+
+reference:
+  - title: "Compare estimators"
+    desc: >
+      Run DID/TWFE, synthetic control, SDID, matrix completion, DIFP and TROP
+      (plus optional gsynth, augsynth and Callaway--Sant'Anna) on one panel,
+      and put the results on a single tidy ATT schema.
+    contents:
+      - panel_compare
+      - as_att
+      - bind_att
+      - autoplot.cf_comparison
+      - counterfactual_matrix
+      - plot_counterfactual
+
+  - title: "TROP estimator"
+    desc: >
+      The Triply RObust Panel estimator of Athey, Imbens, Qu and Viviano
+      (2026): data-frame and matrix entry points, and solver / cross-validation
+      / inference settings.
+    contents:
+      - trop
+      - trop_control
+      - trop_matrix
+      - panel_matrices
+
+  - title: "TROP diagnostics"
+    desc: >
+      Inspect a TROP fit: trajectories, event-study effects, placebo tests,
+      standard-error comparisons, penalty ablations and penalty-sensitivity
+      surfaces.
+    contents:
+      - autoplot.trop
+      - trop_event_study
+      - autoplot.trop_event_study
+      - trop_placebo_test
+      - autoplot.trop_placebo_test
+      - compare_se_modes
+      - autoplot.cf_se_comparison
+      - trop_ablation
+      - format.trop_ablation
+      - trop_sensitivity
+      - autoplot.cf_trop_grid
+      - surface_matrix
+      - selected_lambda
+      - plot_trop_surfaces
+
+  - title: "Held-out RMSE and simulation"
+    desc: >
+      Score estimators on held-out control data, trace estimation RMSE over a
+      design dimension, and simulate panels with a known effect.
+    contents:
+      - panel_rmse
+      - autoplot.cf_rmse_tbl
+      - rmse_curve
+      - rmse_curves
+      - autoplot.cf_rmse_curve
+      - autoplot.cf_rmse_curves
+      - plot.cf_rmse_curve
+      - sim_panel
+      - sim_semisynthetic
+      - true_att
+
+  - title: "Package overview"
+    contents:
+      - cfcompare-package
+      - reexports

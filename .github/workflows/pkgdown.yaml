@@ -1,0 +1,61 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
+# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
+#
+# Builds the pkgdown site and publishes it to the gh-pages branch, which
+# GitHub Pages serves at https://takuma1102.github.io/cfcompare/.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+name: pkgdown.yaml
+
+permissions: read-all
+
+jobs:
+  pkgdown:
+    runs-on: ubuntu-latest
+    # Only restrict concurrency for non-PR jobs
+    concurrency:
+      group: pkgdown-${{ github.event_name != 'pull_request' || github.run_id }}
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # Hard dependencies only, as in R-CMD-check.yaml: the optional
+          # estimator packages (synthdid, augsynth, gsynth, did, ...) are not
+          # needed to build the site -- every example that would use them is
+          # skipped when they are absent.
+          dependencies: '"hard"'
+          extra-packages: |
+            any::pkgdown
+            any::knitr
+            any::rmarkdown
+            local::.
+          needs: website
+
+      - name: Build site
+        run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
+        shell: Rscript {0}
+
+      - name: Deploy to GitHub pages 🚀
+        if: github.event_name != 'pull_request'
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        with:
+          clean: false
+          branch: gh-pages
+          folder: docs

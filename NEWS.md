@@ -1,11 +1,22 @@
+# cfcompare 0.2.1
+
+* Package website built with pkgdown:
+  <https://takuma1102.github.io/cfcompare/>.
+* The comparison tables of the TROP paper, the official Python package, the
+  official Stata command and cfcompare (as of July 2026 and as of October
+  2026), together with the notes on this package's implementation choices,
+  moved from the README to the article "TROP implementations compared: the
+  paper, Python, Stata and R"; the README links to it.
+
 # cfcompare 0.2.0
 
 ## Alignment with Stata `trop` v0.2.9 and Python `trop` v0.1.11 (October 2026)
 
 Changes since the July 2026 development release on GitHub / R-universe,
 following the official Stata command's (v0.2.9) and Python package's
-(v0.1.11) summer releases; see the two comparison tables in the README (as of
-July 2026 and as of October 2026).
+(v0.1.11) summer releases; see the comparison tables (as of July 2026 and
+as of October 2026) in the article "TROP implementations compared: the paper,
+Python, Stata and R".
 
 * `trop(anchor = "pooled")` now pools over *treatment spell groups* -- treated
   cells with the same start and end period, pooled across units -- solving
