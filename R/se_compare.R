@@ -6,7 +6,7 @@
 #' Compare TROP standard-error methods on one fit
 #'
 #' Refits the TROP estimator under several inference methods --- the unit-level
-#' stratified block bootstrap and/or the leave-one-treated-unit-out jackknife ---
+#' block bootstrap and/or the delete-one-unit jackknife (over every unit) ---
 #' and returns the estimate, standard error and confidence interval from each on
 #' the common [`cf_att_tbl`][as_att] schema. The penalties are chosen once (a
 #' single `se = "none"` fit --- by cross-validation, or fixed up front with
@@ -33,7 +33,8 @@
 #'   `"Bootstrap SE"` / `"Jackknife SE"`.
 #' @return An object of class `cf_se_comparison` (extending `cf_att_tbl`) with one
 #'   row per inference method, sharing a common point estimate. If a method does
-#'   not apply to the design (for example jackknife with a single treated unit) it
+#'   not apply to the design (for example the bootstrap with a single control
+#'   unit) it
 #'   still contributes a row, carrying the shared estimate with `NA` uncertainty
 #'   and an explanatory `note`.
 #' @seealso [trop()], [trop_ablation()], [bind_att()]

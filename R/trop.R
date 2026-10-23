@@ -36,22 +36,41 @@
 
 #' Unit distances anchored to the AVERAGE treated trajectory (pooled weighting)
 #'
-#' RMS distance of each unit's outcome path to the mean path of the treated
-#' units, over the non-target periods (columns in which no treated unit is
-#' active). This is the pooled unit-distance convention of the official Python
-#' package (`TROP_TWFE_average`) and of the Stata command's pooled mode
-#' (`trop_unit_weights2(..., pooled = 1)`); on a complete block design the three
-#' coincide exactly. Cells where the unit itself is treated (possible under
-#' general assignment patterns) and non-finite cells are additionally excluded,
-#' which is a no-op on block designs.
+#' RMS distance of each unit's outcome path to the mean path of the group's
+#' treated units (`treated_units`; one adoption spell under general assignment,
+#' see `.treatment_spells()`), i.e. the grouped analogue of the paper's eq. (3)
+#' distance
+#' \deqn{dist(j, g) = ( sum_s m_s (1 - W_js) (Ybar_gs - Y_js)^2 /
+#'                      sum_s m_s (1 - W_js) )^{1/2},}
+#' where `Ybar_g` is the per-period mean outcome of the group's units and the
+#' period mask `m_s` keeps a period only when (a) it is outside the target spell
+#' `target_cols` and (b) *no* member of the group is treated in it. Both masks
+#' are the pooled-mode masking of the official Stata command (`group(time)`,
+#' `trop_unit_weights2(..., pooled = 1)`, v0.2.6+): (b) keeps a member's own
+#' treated outcomes from another spell out of the reference path, and the
+#' `(1 - W_js)` factor keeps other units' treated cells out of the comparison
+#' even when they do not overlap the target spell. On a block design every
+#' mask is a no-op and the distance is the official Python package's
+#' pre-period RMS distance (`TROP_TWFE_average`), so the three implementations
+#' coincide there. Non-finite cells are excluded as well.
+#'
+#' A member of the group is compared to the group average like any other unit,
+#' so with several members its own distance is generally not zero (as in the
+#' Stata command); `self_dist` overrides the members' distances with a fixed
+#' value (e.g. `0`), the `unit()` part of the Stata command's
+#' `pooled_treat_distance()` option (v0.2.6+). Units with no usable period get
+#' `NA`, which `.trop_weight_matrix()` maps to the largest finite distance
+#' (smallest positive weight) rather than to a zero weight.
 #' @keywords internal
 #' @noRd
-.unit_distance_to_avg <- function(Y, W, treated_units) {
+.unit_distance_to_avg <- function(Y, W, treated_units, target_cols = NULL,
+                                  self_dist = NULL) {
   N <- nrow(Y); Tt <- ncol(Y)
   tcols <- which(colSums(W[treated_units, , drop = FALSE]) > 0)
   avg <- colMeans(Y[treated_units, , drop = FALSE], na.rm = TRUE)
   keep <- rep(TRUE, Tt)
-  keep[tcols] <- FALSE                          # drop the target periods
+  keep[tcols] <- FALSE                 # drop periods where any member is treated
+  if (!is.null(target_cols)) keep[target_cols] <- FALSE   # and the target spell
   useM <- matrix(keep, N, Tt, byrow = TRUE) & (W == 0) & is.finite(Y) &
     matrix(is.finite(avg), N, Tt, byrow = TRUE)
   diff2 <- (Y - matrix(avg, N, Tt, byrow = TRUE))^2
@@ -59,27 +78,43 @@
   n <- rowSums(useM); ssq <- rowSums(diff2)
   d <- rep(NA_real_, N); pos <- n > 0
   d[pos] <- sqrt(ssq[pos] / n[pos])
+  if (!is.null(self_dist)) d[treated_units] <- self_dist   # own-group override
   d
 }
 
-#' Centre (1-based, possibly half-integer) of the treated block of periods.
+#' Centre (1-based, possibly half-integer) of a treated block of periods.
 #'
-#' Generalises the trailing-block centre `T - tp/2` (0-based; the official
-#' Python convention) to treated blocks anywhere in the panel, following the
-#' Stata command: centre = (min + max + 1) / 2 over the 0-based treated
-#' columns, i.e. (min + max + 1) / 2 in 1-based indexing. For a trailing block
-#' of width `tp` this equals the previous `(T - tp/2) + 1`, so results on
-#' block designs are unchanged.
+#' The anchor of the pooled time weights `theta_s = exp(-lambda_time |s - c|)`.
+#' Two conventions:
+#' * `"midpoint"` (default): `c = (min + max) / 2` of the treated columns, the
+#'   true midpoint of the block. This is the convention of the official Stata
+#'   command since v0.2.4 (`trop_time_weights2(..., pooled = 1)`), and it makes
+#'   the pooled time distance coincide with the paper's per-cell `|s - t|` when
+#'   the block is a single period, so a single treated cell gets the same
+#'   estimate under both anchors.
+#' * `"python"`: `c = (min + max + 1) / 2`, i.e. half a period later. For a
+#'   trailing block of width `tp` this is the `T - tp/2` (0-based) centre of the
+#'   official Python package (`TROP_TWFE_average`), which [trop_matrix()] keeps
+#'   for cross-checking; the Stata command used it before v0.2.4.
 #' @keywords internal
 #' @noRd
-.treated_block_center <- function(treated_cols) {
-  (min(treated_cols) + max(treated_cols) + 1) / 2
+.treated_block_center <- function(treated_cols,
+                                  convention = c("midpoint", "python")) {
+  convention <- match.arg(convention)
+  c0 <- (min(treated_cols) + max(treated_cols)) / 2
+  if (convention == "python") c0 + 0.5 else c0
 }
 
 #' Build the N x T weight matrix theta_s * omega_j for an anchor.
+#'
+#' `self_cols` / `self_time` override the time distance of the periods inside
+#' the target spell (`self_cols`) with a fixed value, the `time()` part of the
+#' Stata command's `pooled_treat_distance()` option; both are ignored unless
+#' both are supplied.
 #' @keywords internal
 #' @noRd
-.trop_weight_matrix <- function(du, t_anchor, Tt, lam) {
+.trop_weight_matrix <- function(du, t_anchor, Tt, lam, self_cols = NULL,
+                                self_time = NULL) {
   du[!is.finite(du)] <- if (any(is.finite(du))) max(du[is.finite(du)]) else 0
   omega <- exp(-lam$unit * du)
   # time distance: min distance to the anchor period(s)
@@ -89,8 +124,41 @@
   } else {
     dtime <- vapply(s, function(ss) min(abs(ss - t_anchor)), numeric(1))
   }
+  if (!is.null(self_time) && length(self_cols)) dtime[self_cols] <- self_time
   theta <- exp(-lam$time * dtime)
   outer(omega, theta)
+}
+
+#' Resolved own-group distance overrides (`trop_control(pooled_treat_distance=)`).
+#'
+#' Like `.nn_floor_of()` / `.time_center_of()`: the value stamped into the
+#' lambda list at fit time (`lam$pooled_treat_distance`, written by
+#' `.trop_engine()`) takes precedence over the control setting, so downstream
+#' re-solves reproduce the fit. Returns `list(unit = , time = )` with `NULL`
+#' entries meaning "the usual distance".
+#' @keywords internal
+#' @noRd
+.ptd_of <- function(lam, ctrl = NULL) {
+  v <- lam$pooled_treat_distance
+  if (is.null(v)) v <- ctrl$pooled_treat_distance
+  .check_ptd(v)
+}
+
+#' Validate a `pooled_treat_distance` setting.
+#' @keywords internal
+#' @noRd
+.check_ptd <- function(v) {
+  if (is.null(v)) return(list(unit = NULL, time = NULL))
+  if (!is.list(v) || length(setdiff(names(v), c("unit", "time"))) ||
+      (length(v) && is.null(names(v))))
+    stop("`pooled_treat_distance` must be NULL or a list with elements ",
+         "`unit` and/or `time`.", call. = FALSE)
+  ok <- function(x) is.null(x) ||
+    (is.numeric(x) && length(x) == 1L && is.finite(x) && x >= 0)
+  if (!ok(v$unit) || !ok(v$time))
+    stop("`pooled_treat_distance` entries must be single non-negative finite ",
+         "numbers (or NULL).", call. = FALSE)
+  list(unit = v$unit, time = v$time)
 }
 
 # ---- single-cell counterfactual prediction ---------------------------------
@@ -127,6 +195,22 @@
   v <- lam$nn_floor
   if (!ok(v)) v <- ctrl$nn_floor
   if (ok(v)) v else 0
+}
+
+#' Resolved time-centre convention for the pooled time weights.
+#'
+#' Like `.nn_floor_of()`: a value stamped into the lambda list at fit time
+#' (`lam$time_center`, written by `.trop_engine()`) takes precedence, so the
+#' event study, plots and `counterfactual_matrix()` reproduce the fit's
+#' convention even when called with a fresh `trop_control()`; otherwise the
+#' control setting, defaulting to `"midpoint"`.
+#' @keywords internal
+#' @noRd
+.time_center_of <- function(lam, ctrl = NULL) {
+  v <- lam$time_center
+  if (is.null(v)) v <- ctrl$time_center
+  if (is.null(v)) v <- "midpoint"
+  match.arg(v, c("midpoint", "python"))
 }
 
 #' Extract the warm-startable state from a solver fit.
@@ -193,10 +277,14 @@
 #' common-post-block behaviour; under staggered adoption each placebo draw
 #' reproduces the real cohort structure (who adopts when).
 #'
-#' Placebo units are grouped into adoption cohorts (identical W rows). For each
-#' cohort the draw caches its units, treated columns, block centre and unit
-#' distances (none of which depend on the penalties), so the coordinate-descent
-#' search reuses them across every penalty evaluation.
+#' Placebo cells are grouped into treatment spells (`.treatment_spells()`:
+#' same start and end period, pooled across units), exactly as the Stata
+#' command groups its placebo draws (`trop_build_groups(Wp, "time")` inside
+#' `trop_placebo_rmse_path()`) and as `.trop_att(anchor = "pooled")` groups the
+#' real treated cells. For each spell group the draw caches its units, spell
+#' columns, block centre and unit distances (none of which depend on the
+#' penalties), so the coordinate-descent search reuses them across every
+#' penalty evaluation.
 #' @keywords internal
 #' @noRd
 .trop_placebo_setup <- function(Y, W, pat, ctrl) {
@@ -217,22 +305,21 @@
     on.exit(.Random.seed_restore(old), add = TRUE)
     set.seed(ctrl$seed)
   }
-  # Cohorts of the pattern bank: rows of Pat that are identical adopt together.
-  pat_key <- apply(Pat, 1L, paste, collapse = "")
-  cohorts <- split(seq_len(n_tr), pat_key)
+  tc  <- ctrl$time_center %||% "midpoint"
+  ptd <- .check_ptd(ctrl$pooled_treat_distance)
   draws <- lapply(seq_len(n_pl), function(b) {
     tr <- sample.int(nrow(Yp), n_tr)
     Wp <- matrix(0, nrow(Yp), ncol(Yp))
     Wp[tr, ] <- Pat                       # stamp one real pattern per unit
-    groups <- lapply(cohorts, function(idx) {
-      us   <- tr[idx]
-      cols <- which(Pat[idx[1L], ] == 1)
-      list(us = us, cols = cols,
-           size     = length(us) * length(cols),
-           t_center = .treated_block_center(cols),
-           du       = .unit_distance_to_avg(Yp, Wp, us))
+    # Spell groups of the placebo assignment (same start/end, pooled across
+    # units): the pooled estimands the real fit will use (own-group distance
+    # overrides included, as in the Stata command's placebo CV).
+    groups <- lapply(.treatment_spells(Wp), function(g) {
+      g$t_center <- .treated_block_center(g$cols, tc)
+      g$du       <- .unit_distance_to_avg(Yp, Wp, g$us, g$cols, ptd$unit)
+      g$self_time <- ptd$time
+      g
     })
-    names(groups) <- NULL
     list(Wp = Wp, groups = groups, post_cols = post_cols)
   })
   list(Yp = Yp, ctrl_units = ctrl_units, draws = draws)
@@ -241,13 +328,13 @@
 #' Placebo-RMSE criterion: mean squared placebo ATT across the draws.
 #'
 #' Each placebo ATT is a pooled estimate on the control panel: within each
-#' adoption cohort of the draw the weights are anchored to that cohort's
-#' treated units and block centre, the cohort placebo ATT is the mean gap over
-#' its placebo cells, and cohorts are combined cell-weighted -- mirroring the
-#' per-spell, cell-weighted scoring of the official Stata command
+#' treatment spell group of the draw the weights are anchored to that group's
+#' units and spell centre, the group placebo ATT is the mean gap over its
+#' placebo cells, and groups are combined cell-weighted -- the per-spell,
+#' cell-weighted scoring of the official Stata command
 #' (`trop_placebo_rmse_path()`), which "rehearses" the pooled estimand under
-#' the real adoption pattern. With a single cohort (block adoption) this
-#' collapses to the previous single-anchor pooled ATT, matching the
+#' the real adoption pattern. With a single group (block adoption) this
+#' collapses to the single-anchor pooled ATT, matching the
 #' `TROP_TWFE_average` placebo tuning of the official Python package. The true
 #' placebo effect is zero, so smaller is better. Penalty selection therefore
 #' uses the pooled ATT even when the final fit uses `anchor = "per_cell"`.
@@ -268,7 +355,8 @@
     att <- 0; wsum <- 0
     for (g in seq_len(ng)) {
       gr <- d$groups[[g]]
-      wmat <- .trop_weight_matrix(gr$du, gr$t_center, Tt, lam)
+      wmat <- .trop_weight_matrix(gr$du, gr$t_center, Tt, lam,
+                                  self_cols = gr$cols, self_time = gr$self_time)
       fit  <- .trop_solve(Yp, d$Wp, wmat, lam, ctrl,
                           state_init = if (is.null(warm)) NULL
                                        else warm[[k]][[g]],
@@ -547,24 +635,39 @@
 #'   fitting (standardized) scale, with the centre/scale stored in `$scaling`.
 #' @param anchor How weights are anchored to treated cells: `"per_cell"`
 #'   re-solves eq. (2) with cell-specific weights for every treated cell
-#'   (faithful to the paper); `"pooled"` solves once with weights anchored to the
-#'   treated set (fast); `"auto"` (default) uses `per_cell` when there are at
-#'   most `max_cells` treated cells and `pooled` otherwise. `trop_matrix()` has 
-#'   no `anchor` argument; it is always pooled/block-center.
-#' @param se Standard-error method: `"bootstrap"` (default; unit-level
-#'   stratified block bootstrap), `"jackknife"` (leave-one-treated-unit-out;
-#'   needs at least 2 treated units), `"auto"` (jackknife when there are at least
-#'   2 treated units, else bootstrap), or `"none"`.
+#'   (faithful to the paper); `"pooled"` solves once per *treatment spell
+#'   group* -- treated cells with the same start and end period, pooled across
+#'   units, the `group(time)` estimands of the official Stata command -- with
+#'   weights anchored to that group (unit distances to the average trajectory
+#'   of the group's units over the periods in which none of them is treated,
+#'   time distances to the midpoint of the spell; see [trop_control()]'s
+#'   `time_center`). Simultaneous permanent adoption is one group, staggered
+#'   adoption gives one group per cohort, and a unit that switches in and out
+#'   of treatment contributes one group per spell; the ATT is the
+#'   treated-cell-weighted average of the group effects, which are returned in
+#'   `$tau_groups`. `"auto"` (default) uses `per_cell` when there are at most
+#'   `max_cells` treated cells and `pooled` otherwise. `trop_matrix()` has no
+#'   `anchor` argument; it is always pooled over a single trailing block.
+#' @param se Standard-error method: `"bootstrap"` (default; unit-level block
+#'   bootstrap, stratified by treatment status unless
+#'   `trop_control(boot_resample = "controls")`), `"jackknife"`
+#'   (delete-one-unit over *every* unit, treated and control, as the Stata
+#'   command's `vce(jackknife)`; replicates that leave no treated unit are
+#'   skipped), `"auto"` (jackknife when there are at least 2 treated units,
+#'   else bootstrap), or `"none"`.
 #' @param grids Optional list of penalty grids; see [trop_control()].
 #' @param control A list of solver/CV settings from [trop_control()].
 #' @param verbose Logical; print CV progress.
 #' @return An object of class `trop`: a list with the ATT `estimate`,
 #'   `std.error`, `conf.low`/`conf.high`, the selected penalties `lambda`,
-#'   any covariate coefficients `phi`, per-cell effects, the estimated
-#'   counterfactual matrix, weights, the reshaped panel, and `scaling` (the
-#'   outcome centre/scale used internally; the identity unless
-#'   `standardize = TRUE`). All effect and outcome-level components are on the
-#'   raw outcome scale; `panel$Y` and `lambda` are on the fitting scale.
+#'   any covariate coefficients `phi`, per-cell effects (`tau_cells`), the
+#'   per-spell-group effects `tau_groups` (pooled anchor only: one row per
+#'   group with its start/end period, unit and cell counts and `estimate`;
+#'   the ATT is their `n_cells`-weighted average), the estimated
+#'   counterfactual matrix, the reshaped panel, and `scaling` (the outcome
+#'   centre/scale used internally; the identity unless `standardize = TRUE`).
+#'   All effect and outcome-level components are on the raw outcome scale;
+#'   `panel$Y` and `lambda` are on the fitting scale.
 #' @references Athey, S., Imbens, G. W., Qu, Z., & Viviano, D. (2026).
 #'   Triply Robust Panel Estimators. \emph{Journal of Applied Econometrics}. \doi{10.1002/jae.70061}.
 #' @examples
@@ -667,6 +770,8 @@ trop <- function(data, outcome, treatment, unit, time,
     eng$tau_cells$y0_hat <- ctr + s * eng$tau_cells$y0_hat
     eng$tau_cells$tau    <- s * eng$tau_cells$tau
   }
+  if (!is.null(eng$tau_groups))
+    eng$tau_groups$estimate <- s * eng$tau_groups$estimate
   if (!is.null(eng$counterfactual))
     eng$counterfactual <- ctr + s * eng$counterfactual
   if (length(eng$phi)) eng$phi <- s * eng$phi
@@ -701,6 +806,10 @@ trop <- function(data, outcome, treatment, unit, time,
   # counterfactual_matrix(), placebo tests) reproduces the same effective
   # penalty even under a fresh trop_control().
   lam$nn_floor <- control$nn_floor
+  # Likewise the pooled time-centre convention (trop_control(time_center=))
+  # and the own-group distance overrides (pooled_treat_distance=).
+  lam$time_center <- .time_center_of(list(), control)
+  lam$pooled_treat_distance <- .check_ptd(control$pooled_treat_distance)
 
   est <- .trop_att(Y, W, lam, control, anchor, pat, X = X)
 
@@ -716,9 +825,12 @@ trop <- function(data, outcome, treatment, unit, time,
     conf.high = inf$conf.high,
     se.method = se,
     n_boot = inf$n_boot,
+    boot_resample = if (identical(se, "bootstrap"))
+      control$boot_resample %||% "stratified" else NULL,
     lambda = lam,
     anchor = anchor,
     tau_cells = est$tau_cells,
+    tau_groups = est$tau_groups,
     counterfactual = est$Mhat,
     rank = est$rank,
     phi = est$phi
@@ -776,25 +888,31 @@ trop <- function(data, outcome, treatment, unit, time,
   rnk <- NA_integer_
   phi <- numeric(0)
 
+  tau_groups <- NULL
   if (anchor == "pooled") {
-    # Pooled weights: RMS distance to the AVERAGE treated trajectory, matching
-    # the matrix-in trop_matrix()/.trop_reference_weights, the official Python
-    # TROP_TWFE_average and the Stata pooled mode. (Averaging per-treated-unit
-    # distances instead is not the reference convention.)
-    du <- .unit_distance_to_avg(Y, W, pat$treated_units)
-    # Anchor the time weights to the CENTRE of the treated block, matching the
-    # references (for a trailing block, dist_time = |s - (T - tp/2)| 0-based).
-    # .treated_block_center() generalises this to treated blocks anywhere in
-    # the panel (Stata convention). Passing the vector of treated periods to
-    # .trop_weight_matrix() would instead use the distance to the nearest
-    # treated period, which flattens theta across the block and does not match
-    # the reference.
-    t_center <- .treated_block_center(unique(treated_cells[, 2]))
-    wmat <- .trop_weight_matrix(du, t_center, Tt, lam)
-    fit <- .trop_solve(Y, W, wmat, lam, ctrl, X = X)
-    Mhat <- fit$M
-    rnk <- fit$rank
-    phi <- fit$phi
+    # Pooled weights, one solve per treatment spell group (the Stata command's
+    # group(time) estimands; a single group on a block design): unit distances
+    # to the AVERAGE trajectory of the group's units, time distances to the
+    # centre of the group's spell. Each group's counterfactual is kept on that
+    # group's cells; see .trop_pooled_fit() for the assembly of the full matrix.
+    # (Passing the vector of treated periods to .trop_weight_matrix() would
+    # instead use the distance to the nearest treated period, which flattens
+    # theta across the block and does not match the references.)
+    groups <- pat$spells %||% .treatment_spells(W)
+    pf <- .trop_pooled_fit(Y, W, lam, ctrl, groups, X = X)
+    Mhat <- pf$M
+    rnk <- pf$rank
+    phi <- pf$phi
+    # per-spell effects (the Stata command's e(group_tau) / e(group_info)):
+    # the ATT below is their treated-cell-weighted average.
+    cn <- colnames(Y) %||% as.character(seq_len(Tt))
+    tau_groups <- do.call(rbind, lapply(groups, function(g) {
+      gap <- (Y - Mhat)[g$us, g$cols, drop = FALSE]
+      data.frame(start = cn[g$start], end = cn[g$end],
+                 n_units = length(g$us), n_cells = sum(is.finite(gap)),
+                 estimate = mean(gap[is.finite(gap)]),
+                 stringsAsFactors = FALSE)
+    }))
   } else {
     ranks <- integer(nrow(treated_cells))
     phis <- vector("list", nrow(treated_cells))
@@ -829,8 +947,80 @@ trop <- function(data, outcome, treatment, unit, time,
     tau = tau,
     stringsAsFactors = FALSE
   )
-  list(att = mean(tau), tau_cells = tau_cells, Mhat = Mhat, rank = rnk,
-       phi = phi)
+  list(att = mean(tau), tau_cells = tau_cells, tau_groups = tau_groups,
+       Mhat = Mhat, rank = rnk, phi = phi)
+}
+
+#' Pooled fit over treatment spell groups.
+#'
+#' Solves eq. (2) once per group in `groups` (from `.treatment_spells()`) with
+#' weights anchored to that group -- unit distances to the group's average
+#' trajectory (`.unit_distance_to_avg()`), time distances to the centre of the
+#' group's spell (`.treated_block_center()`) -- excluding every treated cell of
+#' the panel from the loss, as in the Stata command's `group(time)` mode
+#' (v0.2.9). Consecutive groups warm-start from the previous solution.
+#'
+#' Returns the full `N x T` counterfactual matrix `M` assembled from the
+#' group fits: each group's own cells come from that group's solve, the
+#' remaining cells of a treated unit's row come from the group of the unit's
+#' *first* spell (the natural reference for its pre-treatment path, e.g. in the
+#' event study), and never-treated rows come from the first group. With a
+#' single group (block adoption) `M` is simply that fit, so results on block
+#' designs are unchanged. With uniform weights (`lambda_time = lambda_unit =
+#' 0`) every group shares the same weights and the program is solved once.
+#' @keywords internal
+#' @noRd
+.trop_pooled_fit <- function(Y, W, lam, ctrl, groups, X = NULL) {
+  N <- nrow(Y); Tt <- ncol(Y)
+  if (!length(groups)) stop("No treated cells found.", call. = FALSE)
+  tc  <- .time_center_of(lam, ctrl)
+  ptd <- .ptd_of(lam, ctrl)
+  uniform <- isTRUE(lam$unit == 0) && isTRUE(lam$time == 0)
+  M <- matrix(NA_real_, N, Tt, dimnames = dimnames(Y))
+  ranks <- integer(length(groups)); phis <- vector("list", length(groups))
+  first_spell <- integer(N)        # group index of each unit's earliest spell
+  st_prev <- NULL
+  fit <- NULL
+  for (g in seq_along(groups)) {
+    gr <- groups[[g]]
+    if (is.null(fit) || !uniform) {
+      du <- .unit_distance_to_avg(Y, W, gr$us, gr$cols, ptd$unit)
+      wmat <- .trop_weight_matrix(du, .treated_block_center(gr$cols, tc), Tt, lam,
+                                  self_cols = gr$cols, self_time = ptd$time)
+      fit <- .trop_solve(Y, W, wmat, lam, ctrl, state_init = st_prev, X = X)
+      st_prev <- .solver_state(fit)
+    }
+    ranks[g] <- fit$rank; phis[[g]] <- fit$phi
+    # rows whose earliest spell is this group take their whole path from it ...
+    new <- gr$us[first_spell[gr$us] == 0L]
+    first_spell[new] <- g
+    if (g == 1L) M[, ] <- fit$M else if (length(new)) M[new, ] <- fit$M[new, ]
+    # ... and every group keeps its own cells.
+    M[gr$us, gr$cols] <- fit$M[gr$us, gr$cols]
+  }
+  phi <- if (length(phis[[1L]]))
+    rowMeans(matrix(unlist(phis, use.names = FALSE), nrow = length(phis[[1L]])))
+  else numeric(0)
+  list(M = M, rank = round(mean(ranks)), phi = phi, n_groups = length(groups))
+}
+
+#' Bootstrap resample index sets (unit rows), one per replication.
+#'
+#' `"stratified"`: treated and control units resampled separately, each with
+#' replacement, keeping both counts fixed. `"controls"`: the treated units are
+#' kept as they are and only the control units are resampled with replacement
+#' (`trop.bootstrap(resample = "controls")` of the official Python package).
+#' @keywords internal
+#' @noRd
+.boot_index_sets <- function(tu, co, B, resample = c("stratified", "controls")) {
+  resample <- match.arg(resample)
+  # index through sample.int(): sample(x, ...) on a length-one x would draw
+  # from 1:x instead (a single treated unit is a real case under "stratified")
+  lapply(seq_len(B), function(b) {
+    tr <- if (resample == "stratified")
+      tu[sample.int(length(tu), length(tu), replace = TRUE)] else tu
+    c(tr, co[sample.int(length(co), length(co), replace = TRUE)])
+  })
 }
 
 #' Standard errors for the TROP ATT (jackknife / bootstrap).
@@ -846,24 +1036,34 @@ trop <- function(data, outcome, treatment, unit, time,
            function(M) M[idx, , drop = FALSE])
 
   if (method == "jackknife") {
-    tu <- pat$treated_units
-    G <- length(tu)
-    if (G < 2) return(na_out)
+    # Delete-one-unit jackknife over EVERY unit (treated and control), as the
+    # Stata command's vce(jackknife): replicates that leave no treated unit
+    # (or fail) are skipped, and the variance uses the number of finite
+    # replicates, (n - 1) / n * sum((a - mean(a))^2).
+    N <- nrow(Y)
+    if (N < 3) return(na_out)
     par <- (ctrl$workers %||% 1L) > 1L
-    atts <- unlist(.par_lapply(seq_len(G), function(g) {
-      drop <- tu[g]
-      keep <- setdiff(seq_len(nrow(Y)), drop)
-      Yk <- Y[keep, , drop = FALSE]
+    atts <- unlist(.par_lapply(seq_len(N), function(i) {
+      keep <- setdiff(seq_len(N), i)
       Wk <- W[keep, , drop = FALSE]
+      if (!any(Wk == 1) || !any(Wk == 0)) return(NA_real_)
+      Yk <- Y[keep, , drop = FALSE]
       patk <- .assignment_pattern(Wk)
-      .trop_att(Yk, Wk, lam, ctrl, anchor, patk, X = sub_rows(keep))$att
+      tryCatch(.trop_att(Yk, Wk, lam, ctrl, anchor, patk,
+                         X = sub_rows(keep))$att,
+               error = function(e) NA_real_)
     }, parallel = par), use.names = FALSE)
+    atts <- atts[is.finite(atts)]
+    G <- length(atts)
+    if (G < 2) return(na_out)
     v <- (G - 1) / G * sum((atts - mean(atts))^2)
     se <- sqrt(v)
   } else if (method == "bootstrap") {
-    # Unit-level stratified block bootstrap (Athey, Imbens, Qu & Viviano 2026):
-    # resample treated and control units separately, with replacement, keeping
-    # each unit's full time series, and recompute the ATT.
+    # Unit-level block bootstrap (Athey, Imbens, Qu & Viviano 2026): resample
+    # units with replacement, keeping each unit's full time series, and
+    # recompute the ATT. "stratified" (default) resamples the treated and the
+    # control units separately; "controls" keeps the treated units fixed and
+    # resamples only the controls (the Python package's default).
     tu <- pat$treated_units
     co <- setdiff(seq_len(nrow(Y)), tu)
     if (length(tu) < 1 || length(co) < 2) return(na_out)
@@ -875,9 +1075,7 @@ trop <- function(data, outcome, treatment, unit, time,
     # Draw all resample index sets up front (reproducible given the seed); the
     # ATT solves below are deterministic, so they can be evaluated in parallel
     # without affecting the draws.
-    idx_list <- lapply(seq_len(B), function(b)
-      c(sample(tu, length(tu), replace = TRUE),
-        sample(co, length(co), replace = TRUE)))
+    idx_list <- .boot_index_sets(tu, co, B, ctrl$boot_resample %||% "stratified")
     par <- (ctrl$workers %||% 1L) > 1L
     one_boot <- function(idx) {
       Yb <- Y[idx, , drop = FALSE]; Wb <- W[idx, , drop = FALSE]
@@ -938,9 +1136,40 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @param n_placebo Number of placebo assignments drawn when
 #'   `cv_method = "placebo"` (larger is more stable but slower).
 #' @param max_cells Threshold for `anchor = "auto"` to switch to pooled weights.
+#' @param time_center Where the pooled time weights
+#'   `theta_s = exp(-lambda_time |s - c|)` are centred within a treated spell
+#'   (`anchor = "pooled"`, the placebo CV criterion and the pooled
+#'   counterfactual behind the plots / event study). `"midpoint"` (default)
+#'   uses the true midpoint `c = (first + last) / 2` of the spell, the
+#'   convention of the official Stata command (v0.2.4+); for a single treated
+#'   period it reduces to the paper's per-cell distance `|s - t|`, so a single
+#'   treated cell gets the same estimate under both anchors. `"python"` places
+#'   the centre half a period later (`(first + last + 1) / 2`), the `T - tp/2`
+#'   convention of the official Python package, which [trop_matrix()] always
+#'   uses; choose it for like-for-like comparisons with that package.
+#' @param pooled_treat_distance Optional overrides for the distances of a
+#'   pooled group to *itself*, as a list with elements `unit` and/or `time`
+#'   (single non-negative numbers; `NULL`, the default, keeps the usual
+#'   distances). `unit` replaces the unit distance of every member of the group
+#'   -- which is otherwise its distance to the group average, hence generally
+#'   non-zero with several members -- by the given value, so
+#'   `list(unit = 0)` gives the treated units the full unit weight; `time`
+#'   replaces the time distance of the periods inside the spell by the given
+#'   value, so `list(time = 0)` gives the treated periods the full time
+#'   weight. This is the `pooled_treat_distance(unit(#) time(#))` option of the
+#'   official Stata command (v0.2.6+); it applies to the pooled anchor, the
+#'   placebo-CV criterion and the pooled counterfactual behind the plots /
+#'   event study, and is ignored by the per-cell anchor.
 #' @param conf_level Confidence level for intervals.
 #' @param n_boot Number of replications for the bootstrap standard error
 #'   (`se = "bootstrap"`).
+#' @param boot_resample Which units the bootstrap resamples: `"stratified"`
+#'   (default) draws the treated and the control units separately, each with
+#'   replacement (the stratified block bootstrap of the paper and of the Stata
+#'   command); `"controls"` keeps the treated units fixed and resamples only
+#'   the control units (the default `resample = "controls"` of the official
+#'   Python package's `trop.bootstrap`, v0.1.11+, suited to designs with a
+#'   single or very few treated units).
 #' @param boot_ci Bootstrap confidence-interval type: `"percentile"` or
 #'   `"normal"`.
 #' @param nn_floor Small non-negative stabilising constant *added* to every
@@ -985,16 +1214,24 @@ trop <- function(data, outcome, treatment, unit, time,
 #' @export
 trop_control <- function(max_iter = 2000L, tol = 1e-6,
                          n_cv_cells = 120L, cv_cycles = 2L,
-                         max_cells = 60L, conf_level = 0.95,
-                         n_boot = 200L, boot_ci = c("percentile", "normal"),
+                         max_cells = 60L,
+                         time_center = c("midpoint", "python"),
+                         pooled_treat_distance = NULL,
+                         conf_level = 0.95,
+                         n_boot = 200L,
+                         boot_resample = c("stratified", "controls"),
+                         boot_ci = c("percentile", "normal"),
                          svd = c("truncated", "full"),
                          cv_method = c("loocv", "placebo"), n_placebo = 30L,
                          nn_floor = "auto", nn_floor_scale = 1e-3,
                          workers = 1L,
                          seed = NULL) {
   boot_ci <- match.arg(boot_ci)
+  boot_resample <- match.arg(boot_resample)
   svd <- match.arg(svd)
   cv_method <- match.arg(cv_method)
+  time_center <- match.arg(time_center)
+  pooled_treat_distance <- .check_ptd(pooled_treat_distance)
   if (!(identical(nn_floor, "auto") ||
         (is.numeric(nn_floor) && length(nn_floor) == 1L &&
          is.finite(nn_floor) && nn_floor >= 0)))
@@ -1006,7 +1243,10 @@ trop_control <- function(max_iter = 2000L, tol = 1e-6,
          call. = FALSE)
   list(max_iter = max_iter, tol = tol, n_cv_cells = n_cv_cells,
        cv_cycles = cv_cycles, max_cells = max_cells,
-       conf_level = conf_level, n_boot = n_boot, boot_ci = boot_ci,
+       time_center = time_center,
+       pooled_treat_distance = pooled_treat_distance,
+       conf_level = conf_level, n_boot = n_boot,
+       boot_resample = boot_resample, boot_ci = boot_ci,
        svd = svd, cv_method = cv_method, n_placebo = n_placebo,
        nn_floor = nn_floor, nn_floor_scale = nn_floor_scale,
        workers = workers,
@@ -1018,7 +1258,11 @@ print.trop <- function(x, ...) {
   cat("Triply RObust Panel (TROP) estimator\n")
   cat(sprintf("  ATT = %.4f", x$estimate))
   if (is.finite(x$std.error)) {
-    cat(sprintf("  (SE %.4f, %s)\n", x$std.error, x$se.method))
+    se_lab <- x$se.method
+    if (identical(se_lab, "bootstrap") &&
+        identical(x$boot_resample %||% "stratified", "controls"))
+      se_lab <- "bootstrap, controls resampled"
+    cat(sprintf("  (SE %.4f, %s)\n", x$std.error, se_lab))
     cat(sprintf("  %.0f%% CI: [%.4f, %.4f]\n",
                 100 * x$conf.level, x$conf.low, x$conf.high))
   } else cat("\n")
@@ -1041,6 +1285,20 @@ print.trop <- function(x, ...) {
               x$rank, x$anchor, x$pattern$type))
   cat(sprintf("  treated cells=%d across %d unit(s)\n",
               x$pattern$n_treated_cells, x$pattern$n_treated_units))
+  ptd <- x$lambda$pooled_treat_distance
+  if (identical(x$anchor, "pooled") && !is.null(ptd) &&
+      (!is.null(ptd$unit) || !is.null(ptd$time))) {
+    cat(sprintf("  own-group distances overridden: unit=%s, time=%s\n",
+                if (is.null(ptd$unit)) "default" else format(ptd$unit),
+                if (is.null(ptd$time)) "default" else format(ptd$time)))
+  }
+  tg <- x$tau_groups
+  if (!is.null(tg) && nrow(tg) > 1L) {
+    cat(sprintf("  pooled over %d treatment spell group(s) (cell-weighted):\n",
+                nrow(tg)))
+    tg$estimate <- sprintf("% .4f", tg$estimate)
+    print(tg, row.names = FALSE)
+  }
   if (length(x$phi)) {
     nm <- names(x$phi) %||% paste0("X", seq_along(x$phi))
     cat("  covariate coefficients (phi):\n")
@@ -1055,20 +1313,15 @@ print.trop <- function(x, ...) {
 #'
 #' The per-cell anchor leaves the counterfactual undefined off the treated
 #' cells, but the event study needs fitted values for the pre-treatment periods
-#' too. This solves eq. (2) once with weights anchored to the whole treated set,
-#' exactly as [autoplot.trop()] does for its trajectory plot, and returns the
-#' full N x T fitted matrix.
+#' too. This runs the pooled, per-spell-group fit of
+#' `.trop_att(anchor = "pooled")` (see `.trop_pooled_fit()`), exactly as
+#' [autoplot.trop()] does for its trajectory plot, and returns the full N x T
+#' fitted matrix.
 #' @keywords internal
 #' @noRd
 .trop_pooled_M <- function(Y, W, lam, ctrl, pat, X = NULL) {
-  tu <- pat$treated_units
-  du <- .unit_distance_to_avg(Y, W, tu)
-  # Block-centre time anchoring, consistent with .trop_att(anchor = "pooled"),
-  # trop_matrix() and the official Python TROP_TWFE_average.
-  tcells   <- which(W == 1, arr.ind = TRUE)
-  t_center <- .treated_block_center(unique(tcells[, 2]))
-  wmat <- .trop_weight_matrix(du, t_center, ncol(Y), lam)
-  .trop_solve(Y, W, wmat, lam, ctrl, X = X)$M
+  groups <- pat$spells %||% .treatment_spells(W)
+  .trop_pooled_fit(Y, W, lam, ctrl, groups, X = X)$M
 }
 
 #' Average treatment effect by event time (period relative to treatment).
@@ -1130,14 +1383,20 @@ print.trop <- function(x, ...) {
   })
 
   if (method == "jackknife") {
-    tu <- pat$treated_units; G <- length(tu)
-    if (G < 2) return(empty())
-    reps <- .par_lapply(seq_len(G), function(g) {
-      keep <- setdiff(seq_len(nrow(Y)), tu[g])
-      Yk <- Y[keep, , drop = FALSE]; Wk <- W[keep, , drop = FALSE]
+    # delete-one-unit over every unit (see .trop_se()); replicates that leave
+    # no treated unit are skipped
+    N <- nrow(Y)
+    if (N < 3) return(empty())
+    reps <- .par_lapply(seq_len(N), function(i) {
+      keep <- setdiff(seq_len(N), i)
+      Wk <- W[keep, , drop = FALSE]
+      if (!any(Wk == 1) || !any(Wk == 0)) return(na_vec())
+      Yk <- Y[keep, , drop = FALSE]
       patk <- .assignment_pattern(Wk)
-      to_row(.trop_period_effects(Yk, Wk, lam, ctrl, patk, pre_periods,
-                                  X = sub_rows(keep))$effect)
+      tryCatch(
+        to_row(.trop_period_effects(Yk, Wk, lam, ctrl, patk, pre_periods,
+                                    X = sub_rows(keep))$effect),
+        error = function(e) na_vec())
     }, parallel = par)
     M <- do.call(rbind, reps)
     v <- vapply(seq_len(ncol(M)), function(j) {
@@ -1159,9 +1418,7 @@ print.trop <- function(x, ...) {
       old <- .Random.seed_safe(); on.exit(.Random.seed_restore(old), add = TRUE)
       set.seed(ctrl$seed)
     }
-    idx_list <- lapply(seq_len(B), function(b)
-      c(sample(tu, length(tu), replace = TRUE),
-        sample(co, length(co), replace = TRUE)))
+    idx_list <- .boot_index_sets(tu, co, B, ctrl$boot_resample %||% "stratified")
     one <- function(idx) {
       Yb <- Y[idx, , drop = FALSE]; Wb <- W[idx, , drop = FALSE]
       rownames(Yb) <- rownames(Wb) <- as.character(seq_along(idx))
@@ -1213,8 +1470,9 @@ print.trop <- function(x, ...) {
 #'
 #' @param object A `trop` fit from [trop()].
 #' @param se Standard-error method for the per-period effects: `"bootstrap"`
-#'   (default; unit-level stratified block bootstrap), `"jackknife"`
-#'   (leave-one-treated-unit-out; needs at least 2 treated units), or `"none"`.
+#'   (default; unit-level block bootstrap, stratified unless
+#'   `trop_control(boot_resample = "controls")`), `"jackknife"`
+#'   (delete-one-unit over every unit, as for the overall ATT), or `"none"`.
 #' @param pre_periods Logical; include pre-treatment event times as placebo /
 #'   pre-trend points (default `TRUE`).
 #' @param control A list of solver/CV/bootstrap settings from [trop_control()];

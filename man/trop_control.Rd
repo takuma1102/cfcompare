@@ -10,8 +10,11 @@ trop_control(
   n_cv_cells = 120L,
   cv_cycles = 2L,
   max_cells = 60L,
+  time_center = c("midpoint", "python"),
+  pooled_treat_distance = NULL,
   conf_level = 0.95,
   n_boot = 200L,
+  boot_resample = c("stratified", "controls"),
   boot_ci = c("percentile", "normal"),
   svd = c("truncated", "full"),
   cv_method = c("loocv", "placebo"),
@@ -39,10 +42,44 @@ eq. (5) criterion (the Stata command's \code{cells(0)}); slower but exact.}
 
 \item{max_cells}{Threshold for \code{anchor = "auto"} to switch to pooled weights.}
 
+\item{time_center}{Where the pooled time weights
+\verb{theta_s = exp(-lambda_time |s - c|)} are centred within a treated spell
+(\code{anchor = "pooled"}, the placebo CV criterion and the pooled
+counterfactual behind the plots / event study). \code{"midpoint"} (default)
+uses the true midpoint \code{c = (first + last) / 2} of the spell, the
+convention of the official Stata command (v0.2.4+); for a single treated
+period it reduces to the paper's per-cell distance \verb{|s - t|}, so a single
+treated cell gets the same estimate under both anchors. \code{"python"} places
+the centre half a period later (\code{(first + last + 1) / 2}), the \code{T - tp/2}
+convention of the official Python package, which \code{\link[=trop_matrix]{trop_matrix()}} always
+uses; choose it for like-for-like comparisons with that package.}
+
+\item{pooled_treat_distance}{Optional overrides for the distances of a
+pooled group to \emph{itself}, as a list with elements \code{unit} and/or \code{time}
+(single non-negative numbers; \code{NULL}, the default, keeps the usual
+distances). \code{unit} replaces the unit distance of every member of the group
+-- which is otherwise its distance to the group average, hence generally
+non-zero with several members -- by the given value, so
+\code{list(unit = 0)} gives the treated units the full unit weight; \code{time}
+replaces the time distance of the periods inside the spell by the given
+value, so \code{list(time = 0)} gives the treated periods the full time
+weight. This is the \verb{pooled_treat_distance(unit(#) time(#))} option of the
+official Stata command (v0.2.6+); it applies to the pooled anchor, the
+placebo-CV criterion and the pooled counterfactual behind the plots /
+event study, and is ignored by the per-cell anchor.}
+
 \item{conf_level}{Confidence level for intervals.}
 
 \item{n_boot}{Number of replications for the bootstrap standard error
 (\code{se = "bootstrap"}).}
+
+\item{boot_resample}{Which units the bootstrap resamples: \code{"stratified"}
+(default) draws the treated and the control units separately, each with
+replacement (the stratified block bootstrap of the paper and of the Stata
+command); \code{"controls"} keeps the treated units fixed and resamples only
+the control units (the default \code{resample = "controls"} of the official
+Python package's \code{trop.bootstrap}, v0.1.11+, suited to designs with a
+single or very few treated units).}
 
 \item{boot_ci}{Bootstrap confidence-interval type: \code{"percentile"} or
 \code{"normal"}.}

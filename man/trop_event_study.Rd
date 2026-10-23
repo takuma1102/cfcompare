@@ -16,8 +16,9 @@ trop_event_study(
 \item{object}{A \code{trop} fit from \code{\link[=trop]{trop()}}.}
 
 \item{se}{Standard-error method for the per-period effects: \code{"bootstrap"}
-(default; unit-level stratified block bootstrap), \code{"jackknife"}
-(leave-one-treated-unit-out; needs at least 2 treated units), or \code{"none"}.}
+(default; unit-level block bootstrap, stratified unless
+\code{trop_control(boot_resample = "controls")}), \code{"jackknife"}
+(delete-one-unit over every unit, as for the overall ATT), or \code{"none"}.}
 
 \item{pre_periods}{Logical; include pre-treatment event times as placebo /
 pre-trend points (default \code{TRUE}).}

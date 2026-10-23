@@ -236,8 +236,10 @@ autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
     # of synthdid's time-weight strip (not observation counts). Heights are
     # scaled to the largest weight so the shape is readable; with lambda_time = 0
     # the weights are uniform and the band is flat.
+    # Centred on the treated span (the single spell on a block design) with
+    # the fit's time_center convention; see trop_control().
     s <- seq_len(Tt)
-    dtime <- abs(s - .treated_block_center(t_anchor))
+    dtime <- abs(s - .treated_block_center(t_anchor, .time_center_of(lam)))
     theta <- exp(-lam$time * dtime)
     theta <- theta / max(theta)
     rng  <- range(c(obs, cf), na.rm = TRUE)

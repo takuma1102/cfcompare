@@ -57,15 +57,27 @@ fitting (standardized) scale, with the centre/scale stored in \verb{$scaling}.}
 
 \item{anchor}{How weights are anchored to treated cells: \code{"per_cell"}
 re-solves eq. (2) with cell-specific weights for every treated cell
-(faithful to the paper); \code{"pooled"} solves once with weights anchored to the
-treated set (fast); \code{"auto"} (default) uses \code{per_cell} when there are at
-most \code{max_cells} treated cells and \code{pooled} otherwise. \code{trop_matrix()} has
-no \code{anchor} argument; it is always pooled/block-center.}
+(faithful to the paper); \code{"pooled"} solves once per \emph{treatment spell
+group} -- treated cells with the same start and end period, pooled across
+units, the \code{group(time)} estimands of the official Stata command -- with
+weights anchored to that group (unit distances to the average trajectory
+of the group's units over the periods in which none of them is treated,
+time distances to the midpoint of the spell; see \code{\link[=trop_control]{trop_control()}}'s
+\code{time_center}). Simultaneous permanent adoption is one group, staggered
+adoption gives one group per cohort, and a unit that switches in and out
+of treatment contributes one group per spell; the ATT is the
+treated-cell-weighted average of the group effects, which are returned in
+\verb{$tau_groups}. \code{"auto"} (default) uses \code{per_cell} when there are at most
+\code{max_cells} treated cells and \code{pooled} otherwise. \code{trop_matrix()} has no
+\code{anchor} argument; it is always pooled over a single trailing block.}
 
-\item{se}{Standard-error method: \code{"bootstrap"} (default; unit-level
-stratified block bootstrap), \code{"jackknife"} (leave-one-treated-unit-out;
-needs at least 2 treated units), \code{"auto"} (jackknife when there are at least
-2 treated units, else bootstrap), or \code{"none"}.}
+\item{se}{Standard-error method: \code{"bootstrap"} (default; unit-level block
+bootstrap, stratified by treatment status unless
+\code{trop_control(boot_resample = "controls")}), \code{"jackknife"}
+(delete-one-unit over \emph{every} unit, treated and control, as the Stata
+command's \code{vce(jackknife)}; replicates that leave no treated unit are
+skipped), \code{"auto"} (jackknife when there are at least 2 treated units,
+else bootstrap), or \code{"none"}.}
 
 \item{grids}{Optional list of penalty grids; see \code{\link[=trop_control]{trop_control()}}.}
 
@@ -76,11 +88,14 @@ needs at least 2 treated units), \code{"auto"} (jackknife when there are at leas
 \value{
 An object of class \code{trop}: a list with the ATT \code{estimate},
 \code{std.error}, \code{conf.low}/\code{conf.high}, the selected penalties \code{lambda},
-any covariate coefficients \code{phi}, per-cell effects, the estimated
-counterfactual matrix, weights, the reshaped panel, and \code{scaling} (the
-outcome centre/scale used internally; the identity unless
-\code{standardize = TRUE}). All effect and outcome-level components are on the
-raw outcome scale; \code{panel$Y} and \code{lambda} are on the fitting scale.
+any covariate coefficients \code{phi}, per-cell effects (\code{tau_cells}), the
+per-spell-group effects \code{tau_groups} (pooled anchor only: one row per
+group with its start/end period, unit and cell counts and \code{estimate};
+the ATT is their \code{n_cells}-weighted average), the estimated
+counterfactual matrix, the reshaped panel, and \code{scaling} (the outcome
+centre/scale used internally; the identity unless \code{standardize = TRUE}).
+All effect and outcome-level components are on the raw outcome scale;
+\code{panel$Y} and \code{lambda} are on the fitting scale.
 }
 \description{
 Fits the TROP estimator of Athey, Imbens, Qu & Viviano (2026) on a long

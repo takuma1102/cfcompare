@@ -42,13 +42,14 @@ here to control the bootstrap replications.}
 \value{
 An object of class \code{cf_se_comparison} (extending \code{cf_att_tbl}) with one
 row per inference method, sharing a common point estimate. If a method does
-not apply to the design (for example jackknife with a single treated unit) it
+not apply to the design (for example the bootstrap with a single control
+unit) it
 still contributes a row, carrying the shared estimate with \code{NA} uncertainty
 and an explanatory \code{note}.
 }
 \description{
 Refits the TROP estimator under several inference methods --- the unit-level
-stratified block bootstrap and/or the leave-one-treated-unit-out jackknife ---
+block bootstrap and/or the delete-one-unit jackknife (over every unit) ---
 and returns the estimate, standard error and confidence interval from each on
 the common \code{\link[=as_att]{cf_att_tbl}} schema. The penalties are chosen once (a
 single \code{se = "none"} fit --- by cross-validation, or fixed up front with

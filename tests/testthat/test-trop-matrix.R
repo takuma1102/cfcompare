@@ -36,20 +36,26 @@ test_that("trop(anchor = 'pooled') matches trop_matrix on a trailing block", {
                       lambda_unit = lam[1], lambda_time = lam[2],
                       lambda_nn = lam[3],
                       treated_periods = pm$treated_periods)
+    # trop_matrix() keeps the Python time-centre convention (T - tp/2); ask
+    # trop() for the same convention for a like-for-like comparison.
     fit <- trop(df, "y", "w", "id", "t",
                 lambda = list(unit = lam[1], time = lam[2], nn = lam[3]),
-                anchor = "pooled", se = "none")
+                anchor = "pooled", se = "none",
+                control = trop_control(time_center = "python"))
     expect_equal(fit$estimate, tm, tolerance = 1e-4)
   }
 })
 
 test_that("pooled time anchor tracks a non-trailing treated block", {
   # treated block in the middle of the panel: the centre must be the centre of
-  # the actual block, not of a hypothetical trailing block.
-  expect_equal(cfcompare:::.treated_block_center(5:8), 7)
-  expect_equal(cfcompare:::.treated_block_center(9:12), 11)   # trailing, T = 12
-  # trailing block equivalence with the previous (T - tp/2) + 1 formula
+  # the actual block, not of a hypothetical trailing block. The default is the
+  # true midpoint (Stata >= 0.2.4); "python" sits half a period later.
+  expect_equal(cfcompare:::.treated_block_center(5:8), 6.5)
+  expect_equal(cfcompare:::.treated_block_center(9:12), 10.5)  # trailing, T = 12
+  expect_equal(cfcompare:::.treated_block_center(7), 7)        # single period
+  expect_equal(cfcompare:::.treated_block_center(5:8, "python"), 7)
+  # "python" trailing block equivalence with the (T - tp/2) + 1 formula
   Tt <- 12; tp <- 4
-  expect_equal(cfcompare:::.treated_block_center((Tt - tp + 1):Tt),
+  expect_equal(cfcompare:::.treated_block_center((Tt - tp + 1):Tt, "python"),
                (Tt - tp / 2) + 1)
 })

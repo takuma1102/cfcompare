@@ -23,13 +23,18 @@
 #' Build a placebo weight matrix anchored to pseudo-treated units / held periods.
 #' @keywords internal
 #' @noRd
-.oos_weight_matrix <- function(Y, excl, pseudo_units, held_periods, lam) {
+.oos_weight_matrix <- function(Y, excl, pseudo_units, held_periods, lam,
+                               time_center = "midpoint", ptd = NULL) {
   # excl: N x T 0/1, 1 = cell excluded from fitting (real treated or held out).
   # Pooled convention (as in .trop_att(anchor = "pooled") and the official
   # Python/Stata packages): unit distances to the average pseudo-treated
-  # trajectory, time distances to the centre of the held-out block.
-  du <- .unit_distance_to_avg(Y, excl, pseudo_units)
-  .trop_weight_matrix(du, .treated_block_center(held_periods), ncol(Y), lam)
+  # trajectory, time distances to the centre of the held-out block, with the
+  # own-group distance overrides of trop_control(pooled_treat_distance=).
+  ptd <- .check_ptd(ptd)
+  du <- .unit_distance_to_avg(Y, excl, pseudo_units, held_periods, ptd$unit)
+  .trop_weight_matrix(du, .treated_block_center(held_periods, time_center),
+                      ncol(Y), lam, self_cols = held_periods,
+                      self_time = ptd$time)
 }
 
 #' Out-of-sample RMSE across panel estimators
@@ -164,7 +169,9 @@ panel_rmse <- function(data, outcome, treatment, unit, time,
         for (meth in nat) {
           lam <- native_cfg[[meth]]$lam
           wmat <- if (meth == "TROP")
-            .oos_weight_matrix(Y, excl, pseudo, held_periods, lam) else
+            .oos_weight_matrix(Y, excl, pseudo, held_periods, lam,
+                               control$time_center %||% "midpoint",
+                               control$pooled_treat_distance) else
             matrix(1, N, Tt)
           Mhat <- .oos_predict_native(Y, fit_mask, wmat, lam$nn, control,
                                       lambda_add = lam$nn_floor %||% 0)

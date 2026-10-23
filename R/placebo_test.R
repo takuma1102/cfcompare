@@ -54,7 +54,8 @@ trop_placebo_test <- function(object, B = 500L,
   # penalties, so the placebo re-solves use the same effective lambda_nn as the
   # observed fit did.
   lam <- list(time = lam0$time, unit = lam0$unit, nn = lam0$nn,
-              nn_floor = lam0$nn_floor %||% 0)
+              nn_floor = lam0$nn_floor %||% 0,
+              time_center = .time_center_of(lam0))
   anchor <- object$anchor %||% "pooled"
   N <- nrow(Y); Tt <- ncol(Y)
   tu <- object$pattern$treated_units

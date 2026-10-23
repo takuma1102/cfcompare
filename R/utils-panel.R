@@ -168,14 +168,63 @@ panel_matrices <- function(data, outcome, treatment, unit, time) {
     }
   }
 
+  spells <- .treatment_spells(W)
+
   list(
     type = if (is_block) "block" else "general",
     treated_units = treated_units,
     n_treated_units = length(treated_units),
     n_treated_cells = sum(W == 1),
     first_treat_period = first_treat_period,
-    block_t0 = t0
+    block_t0 = t0,
+    spells = spells,
+    n_spells = length(spells)
   )
+}
+
+#' Treatment spells: the pooled estimands of a general assignment pattern
+#'
+#' Splits the treated cells of `W` into *spells* -- maximal runs of
+#' consecutive treated periods within a unit -- and groups spells that share
+#' the same (start, end) across units. Each group is one pooled estimand: the
+#' cells `(i, t)` for `i` in `us` and `t` in `cols`. This is the grouping of the
+#' official Stata command's `group(time)` mode (`trop_build_groups(W, "time")`,
+#' v0.2.x): simultaneous permanent adoption gives a single group, staggered
+#' adoption gives one group per adoption cohort, and a unit that switches in and
+#' out of treatment contributes one group per spell. A unit with several spells
+#' therefore belongs to several groups.
+#'
+#' Groups are ordered by start period, then end period. Returns an empty list
+#' when nothing is treated.
+#'
+#' @param W An `N x T` 0/1 treatment matrix.
+#' @return A list of groups, each `list(us, cols, start, end, size, key)`:
+#'   member unit rows, spell columns `start:end`, the number of treated cells
+#'   `length(us) * length(cols)`, and a `"start_end"` label.
+#' @keywords internal
+#' @noRd
+.treatment_spells <- function(W) {
+  N <- nrow(W)
+  starts <- integer(0); ends <- integer(0); units <- integer(0)
+  for (i in seq_len(N)) {
+    w <- W[i, ] == 1
+    if (!any(w)) next
+    r <- rle(as.logical(w))
+    e <- cumsum(r$lengths); s <- e - r$lengths + 1L
+    on <- r$values
+    starts <- c(starts, s[on]); ends <- c(ends, e[on])
+    units  <- c(units, rep.int(i, sum(on)))
+  }
+  if (!length(starts)) return(list())
+  key <- paste(starts, ends, sep = "_")
+  ukeys <- unique(key[order(starts, ends)])
+  lapply(ukeys, function(k) {
+    idx <- which(key == k)
+    a <- starts[idx[1L]]; b <- ends[idx[1L]]
+    us <- units[idx]
+    list(us = us, cols = a:b, start = a, end = b,
+         size = length(us) * (b - a + 1L), key = k)
+  })
 }
 
 # Resolve the set of estimators to run for the comparison entry points
