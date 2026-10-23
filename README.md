@@ -241,24 +241,6 @@ The below is how the original TROP paper, the official Python/Stata packages, an
 | **Covariates** | Yes | No | No | Yes |
 | **Inference** | Bootstrap | None | Bootstrap | Bootstrap or jackknife (when available) |
 
-**As of October 2026** (Python `trop` v0.1.11, Stata `trop` v0.2.9, cfcompare 0.1.0.9007)
-
-|  | TROP Paper | Python (v0.1.11) | Stata (v0.2.9) | R (cfcompare 0.1.0.9007) |
-|:--|:--|:--|:--|:--|
-| **Solver** | Silent | CVXPY (SCS for finite `lambda_nn`, OSQP for `lambda_nn = Inf`), `sum_squares` formulation | FISTA (accelerated proximal gradient with adaptive restart), warm-start nuclear path | Soft-impute-style proximal gradient (base R only; optional truncated SVD via `RSpectra`), warm-start nuclear path |
-| **Estimands / weight anchoring** | Per-cell | Pooled only, over a single trailing block (`treated_periods`) | `group(time)` (default): one pooled estimand per *treatment spell* (same start and end, pooled across units), cell-weighted average; `group(cell)`: per-cell | Auto (per-cell when at most `max_cells` treated cells, else pooled) by default; `anchor = "per_cell"` or `"pooled"` (per treatment spell, as Stata's `group(time)`; per-spell effects in `fit$tau_groups`) |
-| **Pooled unit distance** | N/A (per-cell eq. (3)) | RMS distance to the average treated path over the pre-periods | RMS distance to the group's average path over the periods in which no group member is treated; each comparison unit's own treated cells masked (v0.2.6) | Same as Stata (`.unit_distance_to_avg()`); identical to Python on a block design |
-| **Pooled time-weight centre** | N/A (per-cell `\|t - s\|`) | `T - tp/2` (half a period after the block midpoint) | Spell midpoint `(first + last)/2` (v0.2.4) | Spell midpoint by default; `trop_control(time_center = "python")` reproduces the Python convention, which `trop_matrix()` always uses |
-| **Own-group distance** | N/A | Treated units compared with their own average (non-zero in general) | Same; `pooled_treat_distance(unit(#) time(#))` overrides the members' unit distance and the in-spell time distance (v0.2.6) | Same; `trop_control(pooled_treat_distance = list(unit =, time =))` |
-| **Units with no usable comparison period** | Undefined (0/0) | Not applicable (block design: every unit shares the pre-periods) | Unit weight set to 0 when `lambda_unit > 0` (included when `lambda_unit = 0`) | Largest finite distance (smallest positive weight) |
-| **Other treated cells in the fit** | Excluded | Excluded (block design) | Excluded; tau is the mean residual over the target cells (v0.2.9) | Excluded; tau is the mean residual over the target cells |
-| **CV criterion** | LOOCV | Placebo resampling (default), k-fold; cycle, joint or adaptive search | Placebo resampling (default) or k-fold for `group(time)`; LOOCV for `group(cell)`; cycle, joint or adaptive search | LOOCV (default) or placebo resampling (`cv_method = "placebo"`); coordinate-descent (cycle) search |
-| **Placebo pattern for staggered / general treatment** | N/A (LOOCV) | Common trailing block | Actual per-unit patterns, grouped by treatment spell | Actual per-unit patterns, grouped by treatment spell; warning under LOOCV + staggered |
-| **Outcome pre-processing** | Raw Y | Raw Y | Standardized (always); lambdas on the standardized scale | Raw Y (default) and standardized (`standardize = TRUE`) |
-| **Covariates** | Yes | No | No | Yes |
-| **Bootstrap** | Stratified block bootstrap | `trop.bootstrap`: unit-level bootstrap, controls-only resampling (default) or stratified; percentile CI | `vce(bootstrap)`: stratified block bootstrap; percentile CI (no inference by default) | `se = "bootstrap"` (default): stratified (default) or controls-only (`boot_resample = "controls"`); percentile or normal CI |
-| **Jackknife** | -- | -- | `vce(jackknife)`: delete-one-unit over every unit | `se = "jackknife"`: delete-one-unit over every unit (replicates that leave no treated unit are skipped) |
-
 See the notes below for technical differences for this package's estimation from official packages.
 > Note 1 (solver): finite nuclear-norm penalties are solved with a proximal-gradient
 > soft-impute routine, as opposed to FISTA or SCS, so that the implementation depends only on base R. Thus, exact digits need not perfectly match convex-solver implementations.
@@ -276,6 +258,24 @@ See the notes below for technical differences for this package's estimation from
 
 > Note 7 (inference): `se = "bootstrap"` resamples units with replacement keeping each unit's full time series -- treated and control units separately by default (the stratified block bootstrap of the paper and of the Stata command), or only the control units with `trop_control(boot_resample = "controls")` (the default of the Python package's `trop.bootstrap`). `se = "jackknife"` deletes one unit at a time over every unit, as the Stata command's `vce(jackknife)`; replicates that leave no treated unit are skipped.
 
+
+**As of October 2026** (Python `trop` v0.1.11, Stata `trop` v0.2.9, cfcompare 0.1.0.9007)
+
+|  | TROP Paper | Python (v0.1.11) | Stata (v0.2.9) | R (cfcompare 0.1.0.9007) |
+|:--|:--|:--|:--|:--|
+| **Solver** | Silent | CVXPY (SCS for finite `lambda_nn`, OSQP for `lambda_nn = Inf`), `sum_squares` formulation | FISTA (accelerated proximal gradient with adaptive restart), warm-start nuclear path | Soft-impute-style proximal gradient (base R only; optional truncated SVD via `RSpectra`), warm-start nuclear path |
+| **Estimands / weight anchoring** | Per-cell | Pooled only, over a single trailing block (`treated_periods`) | `group(time)` (default): one pooled estimand per *treatment spell* (same start and end, pooled across units), cell-weighted average; `group(cell)`: per-cell | Auto (per-cell when at most `max_cells` treated cells, else pooled) by default; `anchor = "per_cell"` or `"pooled"` (per treatment spell, as Stata's `group(time)`; per-spell effects in `fit$tau_groups`) |
+| **Pooled unit distance** | N/A (per-cell eq. (3)) | RMS distance to the average treated path over the pre-periods | RMS distance to the group's average path over the periods in which no group member is treated; each comparison unit's own treated cells masked (v0.2.6) | Same as Stata (`.unit_distance_to_avg()`); identical to Python on a block design |
+| **Pooled time-weight centre** | N/A (per-cell `\|t - s\|`) | `T - tp/2` (half a period after the block midpoint) | Spell midpoint `(first + last)/2` (v0.2.4) | Spell midpoint by default; `trop_control(time_center = "python")` reproduces the Python convention, which `trop_matrix()` always uses |
+| **Own-group distance** | N/A | Treated units compared with their own average (non-zero in general) | Same; `pooled_treat_distance(unit(#) time(#))` overrides the members' unit distance and the in-spell time distance (v0.2.6) | Same; `trop_control(pooled_treat_distance = list(unit =, time =))` |
+| **Units with no usable comparison period** | Undefined (0/0) | Not applicable (block design: every unit shares the pre-periods) | Unit weight set to 0 when `lambda_unit > 0` (included when `lambda_unit = 0`) | Largest finite distance (smallest positive weight) |
+| **Other treated cells in the fit** | Excluded | Excluded (block design) | Excluded; tau is the mean residual over the target cells (v0.2.9) | Excluded; tau is the mean residual over the target cells |
+| **CV criterion** | LOOCV | Placebo resampling (default), k-fold; cycle, joint or adaptive search | Placebo resampling (default) or k-fold for `group(time)`; LOOCV for `group(cell)`; cycle, joint or adaptive search | LOOCV (default) or placebo resampling (`cv_method = "placebo"`); coordinate-descent (cycle) search |
+| **Placebo pattern for staggered / general treatment** | N/A (LOOCV) | Common trailing block | Actual per-unit patterns, grouped by treatment spell | Actual per-unit patterns, grouped by treatment spell; warning under LOOCV + staggered |
+| **Outcome pre-processing** | Raw Y | Raw Y | Standardized (always); lambdas on the standardized scale | Raw Y (default) and standardized (`standardize = TRUE`) |
+| **Covariates** | Yes | No | No | Yes |
+| **Bootstrap** | Stratified block bootstrap | `trop.bootstrap`: unit-level bootstrap, controls-only resampling (default) or stratified; percentile CI | `vce(bootstrap)`: stratified block bootstrap; percentile CI (no inference by default) | `se = "bootstrap"` (default): stratified (default) or controls-only (`boot_resample = "controls"`); percentile or normal CI |
+| **Jackknife** | -- | -- | `vce(jackknife)`: delete-one-unit over every unit | `se = "jackknife"`: delete-one-unit over every unit (replicates that leave no treated unit are skipped) |
 
 ## More details
 
