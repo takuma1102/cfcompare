@@ -35,9 +35,10 @@
 #' @examples
 #' \donttest{
 #' df  <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6, att = 3, seed = 1)
+#' # fixed penalties keep the example fast; omit `lambda` to cross-validate
 #' fit <- trop(df, "y", "w", "id", "t", se = "none",
-#'             control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
-#' pt  <- trop_placebo_test(fit, B = 50)
+#'             lambda = list(time = 0.1, unit = 0.5, nn = 2))
+#' pt  <- trop_placebo_test(fit, B = 30)
 #' pt
 #' }
 #' @export

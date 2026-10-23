@@ -33,12 +33,14 @@
 #' @seealso [trop()], [autoplot.cf_comparison()], [plot_counterfactual()]
 #' @examples
 #' \donttest{
-#' # panel_compare() fits TROP with cross-validated penalties (random held-out
-#' # cells), so it is wrapped in \donttest to keep R CMD check fast
+#' # panel_compare() fits TROP with cross-validated penalties, so it is wrapped
+#' # in \donttest; few CV cells and a loose solver tolerance keep it quick
+#' # (use the trop_control() defaults for real analyses)
 #' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, seed = 3)
 #' cmp <- panel_compare(df, "y", "w", "id", "t",
 #'                      methods = c("DID", "MC", "TROP"), se = "none",
-#'                      control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+#'                      control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+#'                                             tol = 1e-3, seed = 1L))
 #' cmp$att
 #' }
 #' @export

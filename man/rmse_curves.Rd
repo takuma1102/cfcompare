@@ -28,8 +28,9 @@ as in the paper's two-panel figure.
 \donttest{
 # defaults are a large simulation; use a small grid + few reps for a quick look
 g <- rmse_curves(values_control = c(12, 16), values_pre = c(5, 8), n_post = 3,
-                 n_runs = 2, methods = c("DID", "TROP"),
-                 control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+                 n_treated = 2, n_runs = 1, methods = c("DID", "TROP"),
+                 control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+                                        tol = 1e-3, seed = 1L))
 plot(g)                  # two separate figures (default)
 # combined = TRUE needs the optional 'patchwork' package:
 if (requireNamespace("patchwork", quietly = TRUE))

@@ -26,7 +26,9 @@ on a single axis -- the quick visual comparison this package is built for.
 \donttest{
 df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, seed = 1)
 cmp <- panel_compare(df, "y", "w", "id", "t",
-                     methods = c("DID", "MC", "TROP"))
+                     methods = c("DID", "MC", "TROP"), se = "none",
+                     control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+                                            tol = 1e-3, seed = 1L))
 autoplot(cmp)
 }
 }

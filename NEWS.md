@@ -1,8 +1,13 @@
-# cfcompare 0.1.0.9007
+# cfcompare 0.2.0
 
-Alignment with the official Stata command (v0.2.9) and Python package
-(v0.1.11) after the summer 2026 releases; see the two comparison tables in the
-README (as of July 2026 and as of October 2026).
+* Initial CRAN submission.
+
+## Alignment with Stata `trop` v0.2.9 and Python `trop` v0.1.11 (October 2026)
+
+Changes since the July 2026 development release on GitHub / R-universe,
+following the official Stata command's (v0.2.9) and Python package's
+(v0.1.11) summer releases; see the two comparison tables in the README (as of
+July 2026 and as of October 2026).
 
 * `trop(anchor = "pooled")` now pools over *treatment spell groups* -- treated
   cells with the same start and end period, pooled across units -- solving
@@ -50,7 +55,7 @@ README (as of July 2026 and as of October 2026).
   follows the same scheme. (`se = "auto"` still picks the jackknife when there
   are at least two treated units and the bootstrap otherwise.)
 
-# cfcompare 0.1.0.9006
+## First development release on GitHub / R-universe (July 2026)
 
 * Native R implementations of the Triply
   RObust Panel (TROP) estimator of Athey, Imbens, Qu & Viviano (2026).

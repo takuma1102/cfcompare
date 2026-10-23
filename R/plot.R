@@ -34,7 +34,9 @@
 #' \donttest{
 #' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, seed = 1)
 #' cmp <- panel_compare(df, "y", "w", "id", "t",
-#'                      methods = c("DID", "MC", "TROP"))
+#'                      methods = c("DID", "MC", "TROP"), se = "none",
+#'                      control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+#'                                             tol = 1e-3, seed = 1L))
 #' autoplot(cmp)
 #' }
 #' @importFrom ggplot2 autoplot
@@ -157,8 +159,9 @@ plot_counterfactual <- function(x, methods = NULL) {
 #' @examples
 #' \donttest{
 #' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 3, seed = 1)
-#' autoplot(trop(df, "y", "w", "id", "t",
-#'               control = trop_control(n_cv_cells = 5L, cv_cycles = 1L)))
+#' autoplot(trop(df, "y", "w", "id", "t", se = "none",
+#'               control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+#'                                      tol = 1e-3, seed = 1L)))
 #' }
 autoplot.trop <- function(object, show_weights = TRUE, show_se = FALSE, ...) {
   .need_ggplot()
@@ -284,8 +287,9 @@ plot.trop <- function(x, ...) {
 #' @examples
 #' \donttest{
 #' df  <- sim_panel(N = 16, T = 9, n_treated = 4, t0 = 6, att = 3, seed = 1)
-#' fit <- trop(df, "y", "w", "id", "t",
-#'             control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+#' # fixed penalties keep the example fast; omit `lambda` to cross-validate
+#' fit <- trop(df, "y", "w", "id", "t", se = "none",
+#'             lambda = list(time = 0.1, unit = 0.5, nn = 2))
 #' autoplot(trop_event_study(fit, se = "bootstrap",
 #'                           control = trop_control(n_boot = 20L, seed = 1)))
 #' }

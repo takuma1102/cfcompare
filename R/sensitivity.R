@@ -74,13 +74,15 @@
 #' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 #' g <- trop_sensitivity(df, "y", "w", "id", "t",
 #'                       lambda_time = c(0, 0.1, 0.5), lambda_nn = c(2, 5),
-#'                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+#'                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+#'                                              tol = 1e-3, seed = 1L))
 #' autoplot(g)
 #'
 #' # Sweep the unit penalty against the nuclear-norm penalty instead, holding
 #' # the time penalty fixed (chosen by CV):
 #' g2 <- trop_sensitivity(df, "y", "w", "id", "t", axes = c("nn", "unit"),
-#'                        control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+#'                        control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+#'                                               tol = 1e-3, seed = 1L))
 #' autoplot(g2)
 #' }
 trop_sensitivity <- function(data, outcome, treatment, unit, time,
@@ -197,7 +199,8 @@ print.cf_trop_grid <- function(x, digits = 4, ...) {
 #' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 #' g <- trop_sensitivity(df, "y", "w", "id", "t",
 #'                       lambda_time = c(0, 0.25, 1),
-#'                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+#'                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+#'                                              tol = 1e-3, seed = 1L))
 #' surface_matrix(g, "cv_loss")
 #' surface_matrix(g, "att")
 #' }
@@ -236,7 +239,8 @@ surface_matrix <- function(grid, value = c("cv_loss", "att")) {
 #' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 #' g <- trop_sensitivity(df, "y", "w", "id", "t",
 #'                       lambda_time = c(0, 0.25, 1),
-#'                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+#'                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+#'                                              tol = 1e-3, seed = 1L))
 #' selected_lambda(g)
 #' }
 #' @export
@@ -328,7 +332,8 @@ plot.cf_trop_grid <- function(x, ...) {
 #' df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 #' g <- trop_sensitivity(df, "y", "w", "id", "t",
 #'                       lambda_time = c(0, 0.25, 1),
-#'                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+#'                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+#'                                              tol = 1e-3, seed = 1L))
 #' plot_trop_surfaces(g, which = "cv_loss")
 #' }
 #' @export

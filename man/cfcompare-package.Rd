@@ -37,11 +37,11 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Takuma Iwasaki \email{iwasakit@stanford.edu}
+\strong{Maintainer}: Takuma Iwasaki \email{iwasakit@stanford.edu} [copyright holder]
 
 Authors:
 \itemize{
-  \item Takuma Iwasaki \email{iwasakit@stanford.edu}
+  \item Takuma Iwasaki \email{iwasakit@stanford.edu} [copyright holder]
 }
 
 }

@@ -6,8 +6,10 @@
 ^doc$
 ^Meta$
 ^dev$
-^.*\.rds$
+^[^/]*\.rds$
 ^.*\.patch$
 ^.*\.diff$
 ^\.lintr$
 ^data-raw$
+^cran-comments\.md$
+^CRAN-SUBMISSION$

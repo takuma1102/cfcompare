@@ -1,21 +1,25 @@
 Package: cfcompare
 Title: Compare DID, SDID, Matrix Completion and the Triply Robust Panel Estimator
-Version: 0.1.0.9007
+Version: 0.2.0
 Authors@R:
     person("Takuma", "Iwasaki", email = "iwasakit@stanford.edu",
-           role = c("aut", "cre"))
+           role = c("aut", "cre", "cph"))
 Description: A comparison toolkit for binary-treatment panel causal inference.
-    Runs difference-in-differences (two-way fixed effects), synthetic
-    difference-in-differences, synthetic control, matrix completion, and the
-    Triply RObust Panel (TROP) estimator of Athey, Imbens, Qu and Viviano (2026)
-    <doi:10.1002/jae.70061> on the same data, and returns their average
-    treatment effects on a single tidy schema with shared plots. TROP, DID and
-    matrix completion are implemented natively; synthetic
-    difference-in-differences and synthetic control are obtained through the
-    'synthdid' package, and an alternative matrix-completion / interactive
-    fixed-effects estimator through 'gsynth'. This is an unofficial, independent
-    implementation and is not affiliated with or endorsed by the authors of the
-    TROP estimator.
+    Runs difference-in-differences (DID; two-way fixed effects), synthetic
+    difference-in-differences (SDID), synthetic control (SC), matrix
+    completion (MC), and the Triply RObust Panel (TROP) estimator of Athey,
+    Imbens, Qu and Viviano (2026) <doi:10.1002/jae.70061> on the same data, and
+    returns their average treatment effects on the treated (ATT) on a single
+    tidy schema with shared plots. TROP, DID and matrix completion are
+    implemented natively; SDID and SC are obtained through the 'synthdid'
+    package, and an alternative matrix-completion / interactive fixed-effects
+    estimator through 'gsynth'. The suggested packages 'synthdid' and
+    'augsynth' are not on CRAN; they can be installed from GitHub at
+    <https://github.com/synth-inference/synthdid> and
+    <https://github.com/ebenmichael/augsynth>, and every feature that needs them
+    is skipped with a message when they are absent. This is an unofficial,
+    independent implementation and is not affiliated with or endorsed by the
+    authors of the TROP estimator.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -41,9 +45,6 @@ Suggests:
 URL: https://github.com/takuma1102/cfcompare
 BugReports: https://github.com/takuma1102/cfcompare/issues
 VignetteBuilder: knitr
-Remotes:
-    synth-inference/synthdid,
-    ebenmichael/augsynth
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/roxygen2/version: 8.0.0

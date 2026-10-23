@@ -17,6 +17,7 @@ bibentry(
   title    = "cfcompare: Compare DID, SDID, Matrix Completion and the Triply Robust Panel Estimator",
   author   = person("Takuma", "Iwasaki"),
   year     = "2026",
-  note     = "Unofficial R package version 0.1.0; not affiliated with the TROP authors",
+  note     = paste0("Unofficial R package version ", meta$Version,
+                    "; not affiliated with the TROP authors"),
   url      = "https://takuma1102.github.io/"
 )

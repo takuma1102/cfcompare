@@ -2,11 +2,14 @@ schema_cols <- c("method", "estimate", "std.error", "conf.low", "conf.high",
                  "n_treated_cells", "n_treated_units", "outcome", "engine",
                  "rank", "note")
 
+# These tests exercise the ATT-table plumbing, not penalty selection: fixed
+# penalties and a cheap CV keep them fast enough to run on CRAN.
 make_fit <- function(seed) {
   df <- sim_panel(N = 18, T = 10, n_treated = 3, t0 = 8, att = 2, seed = seed)
   trop(df, "y", "w", "id", "t", se = "none",
-       control = trop_control(n_cv_cells = 12L, cv_cycles = 1L, seed = 1))
+       lambda = list(time = 0.1, unit = 0.5, nn = 2))
 }
+cheap_cv <- trop_control(n_cv_cells = 5L, cv_cycles = 1L, tol = 1e-3, seed = 1L)
 
 test_that("bind_att stacks fits and relabels single-row results by name", {
   f1 <- make_fit(1); f2 <- make_fit(2)
@@ -22,7 +25,7 @@ test_that("bind_att keeps every row of a multi-row input", {
   df <- sim_panel(N = 18, T = 10, n_treated = 3, t0 = 8, att = 2, seed = 4)
   cmp <- panel_compare(df, "y", "w", "id", "t",
                        methods = c("DID", "TROP"), se = "none",
-                       control = trop_control(n_cv_cells = 12L, cv_cycles = 1L))
+                       control = cheap_cv)
   tbl <- bind_att(cmp, extra = f1)
   expect_equal(nrow(tbl), 3L)
   expect_true(all(c("DID", "TROP", "extra") %in% tbl$method))
@@ -32,7 +35,7 @@ test_that("bind_att warns when a name is given to a multi-row input", {
   df <- sim_panel(N = 16, T = 10, n_treated = 3, t0 = 8, att = 2, seed = 5)
   cmp <- panel_compare(df, "y", "w", "id", "t",
                        methods = c("DID", "TROP"), se = "none",
-                       control = trop_control(n_cv_cells = 12L, cv_cycles = 1L))
+                       control = cheap_cv)
   expect_warning(bind_att(both = cmp), "multi-row")
 })
 

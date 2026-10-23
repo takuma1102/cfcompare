@@ -64,7 +64,9 @@ estimator comparison, so all rows share one point estimate by construction.
 df <- sim_panel(N = 16, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 \donttest{
 compare_se_modes(df, "y", "w", "id", "t",
-                 control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+                 control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+                                        tol = 1e-3, n_boot = 20L,
+                                        seed = 1L))
 
 # Fix the penalties (skip cross-validation), as with trop()'s `lambda`:
 compare_se_modes(df, "y", "w", "id", "t",

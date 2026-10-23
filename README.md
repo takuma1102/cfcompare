@@ -11,7 +11,7 @@
 > maintained by the authors of the TROP article (Athey, Imbens, Qu & Viviano,
 > 2026). Official TROP software by the authors includes the Python package
 > [`trop`](https://pypi.org/project/trop/)
-> ([ostasovskyi/TROP-Estimator](https://github.com/ostasovskyi/TROP-Estimator))
+> ([zhaonanq/TROP-Estimator](https://github.com/zhaonanq/TROP-Estimator))
 > and the Stata command
 > ([justinwaddy/TROP](https://github.com/justinwaddy/TROP)). Please cite the original
 > TROP paper when using the TROP estimator. See [Citation](#citation) for more details.
@@ -48,7 +48,12 @@ install.packages(
 
 Most of the core native engines run without optional estimator packages. Install
 `synthdid`, `gsynth`, `augsynth`, or `did` for the wrapped methods you plan
-to use.
+to use. `gsynth` and `did` are on CRAN; `synthdid` and `augsynth` are on GitHub
+only:
+
+```r
+pak::pak(c("synth-inference/synthdid", "ebenmichael/augsynth"))
+```
 
 ## Quick start
 
@@ -227,7 +232,7 @@ For correctness checks, it has been compared with the official Python `trop`
 package on exactly comparable weighted-TWFE sample datasets, using
 `trop_control(svd = "full")`, and the results agree to numerical tolerance.
 
-The below is how the original TROP paper, the official Python/Stata packages, and `cfcompare` handle main implementation choices. The first table is the comparison as of July 2026 (kept for reference); the second is the comparison as of October 2026, after the official packages' summer releases (Python `trop` v0.1.11, Stata `trop` v0.2.9) and the corresponding changes in `cfcompare` (0.1.0.9007).
+The below is how the original TROP paper, the official Python/Stata packages, and `cfcompare` handle main implementation choices. The first table is the comparison as of July 2026 (kept for reference); the second is the comparison as of October 2026, after the official packages' summer releases (Python `trop` v0.1.11, Stata `trop` v0.2.9) and the corresponding changes in `cfcompare` (0.2.0).
 
 **As of July 2026**
 
@@ -259,9 +264,9 @@ See the notes below for technical differences for this package's estimation from
 > Note 7 (inference): `se = "bootstrap"` resamples units with replacement keeping each unit's full time series -- treated and control units separately by default (the stratified block bootstrap of the paper and of the Stata command), or only the control units with `trop_control(boot_resample = "controls")` (the default of the Python package's `trop.bootstrap`). `se = "jackknife"` deletes one unit at a time over every unit, as the Stata command's `vce(jackknife)`; replicates that leave no treated unit are skipped.
 
 
-**As of October 2026** (Python `trop` v0.1.11, Stata `trop` v0.2.9, cfcompare 0.1.0.9007)
+**As of October 2026** (Python `trop` v0.1.11, Stata `trop` v0.2.9, cfcompare 0.2.0)
 
-|  | TROP Paper | Python (v0.1.11) | Stata (v0.2.9) | R (cfcompare 0.1.0.9007) |
+|  | TROP Paper | Python (v0.1.11) | Stata (v0.2.9) | R (cfcompare 0.2.0) |
 |:--|:--|:--|:--|:--|
 | **Solver** | Silent | CVXPY (SCS for finite `lambda_nn`, OSQP for `lambda_nn = Inf`), `sum_squares` formulation | FISTA (accelerated proximal gradient with adaptive restart), warm-start nuclear path | Soft-impute-style proximal gradient (base R only; optional truncated SVD via `RSpectra`), warm-start nuclear path |
 | **Estimands / weight anchoring** | Per-cell | Pooled only, over a single trailing block (`treated_periods`) | `group(time)` (default): one pooled estimand per *treatment spell* (same start and end, pooled across units), cell-weighted average; `group(cell)`: per-cell | Auto (per-cell when at most `max_cells` treated cells, else pooled) by default; `anchor = "per_cell"` or `"pooled"` (per treatment spell, as Stata's `group(time)`; per-spell effects in `fit$tau_groups`) |

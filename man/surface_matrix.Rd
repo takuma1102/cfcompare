@@ -29,7 +29,8 @@ surfaces can be inspected or post-processed without re-deriving them with
 df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 2, seed = 1)
 g <- trop_sensitivity(df, "y", "w", "id", "t",
                       lambda_time = c(0, 0.25, 1),
-                      control = trop_control(n_cv_cells = 5L, cv_cycles = 1L))
+                      control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+                                             tol = 1e-3, seed = 1L))
 surface_matrix(g, "cv_loss")
 surface_matrix(g, "att")
 }

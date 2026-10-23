@@ -43,8 +43,9 @@ note which standard-error method the fit used.
 \examples{
 \donttest{
 df <- sim_panel(N = 14, T = 9, n_treated = 3, t0 = 6, att = 3, seed = 1)
-autoplot(trop(df, "y", "w", "id", "t",
-              control = trop_control(n_cv_cells = 5L, cv_cycles = 1L)))
+autoplot(trop(df, "y", "w", "id", "t", se = "none",
+              control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+                                     tol = 1e-3, seed = 1L)))
 }
 }
 \seealso{

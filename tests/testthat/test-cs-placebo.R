@@ -3,7 +3,8 @@ test_that("CS method is recognised and skips gracefully without did", {
   df <- sim_panel(N = 20, T = 12, n_treated = 4, t0 = 10, seed = 1)
   cmp <- panel_compare(df, "y", "w", "id", "t", methods = c("DID", "CS"),
                        se = "none",
-                       control = trop_control(n_cv_cells = 20L, cv_cycles = 1L))
+                       control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+                                              tol = 1e-3, seed = 1L))
   expect_true("CS" %in% cmp$att$method)
   expect_true(is.na(cmp$att$estimate[cmp$att$method == "CS"]))
   expect_false(is.na(cmp$att$note[cmp$att$method == "CS"]))
@@ -15,7 +16,8 @@ test_that("panel_rmse placebo metric scores native methods and tags engines", {
   r <- panel_rmse(df, "y", "w", "id", "t",
                   methods = c("DID", "MC", "TROP"), metric = "placebo",
                   horizon = 2, n_pseudo = 3, n_runs = 2,
-                  control = trop_control(n_cv_cells = 20L, cv_cycles = 1L),
+                  control = trop_control(n_cv_cells = 5L, cv_cycles = 1L,
+                                         tol = 1e-3, seed = 1L),
                   seed = 1)
   expect_s3_class(r, "cf_rmse_tbl")
   expect_equal(attr(r, "metric"), "placebo")
