@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Compare DID, SDID, Matrix Completion and the Triply Robust Panel Estimator • cfcompare</title>
+<title>Triply Robust Panel (TROP) Estimator in R • cfcompare</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/Inter-0.4.10/font.css" rel="stylesheet">
@@ -13,9 +13,11 @@
 <link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
-<meta property="og:title" content="Compare DID, SDID, Matrix Completion and the Triply Robust Panel Estimator">
-<meta name="description" content="A comparison toolkit for binary-treatment panel causal inference. Runs difference-in-differences (DID; two-way fixed effects), synthetic difference-in-differences (SDID), synthetic control (SC), matrix completion (MC), and the Triply RObust Panel (TROP) estimator of Athey, Imbens, Qu and Viviano (2026) &lt;doi:10.1002/jae.70061&gt; on the same data, and returns their average treatment effects on the treated (ATT) on a single tidy schema with shared plots. TROP, DID and matrix completion are implemented natively; SDID and SC are obtained through the synthdid package, and an alternative matrix-completion / interactive fixed-effects estimator through gsynth. The suggested packages synthdid and augsynth are not on CRAN; they can be installed from GitHub at &lt;https://github.com/synth-inference/synthdid&gt; and &lt;https://github.com/ebenmichael/augsynth&gt;, and every feature that needs them is skipped with a message when they are absent. This is an unofficial, independent implementation and is not affiliated with or endorsed by the authors of the TROP estimator.">
-<meta property="og:description" content="A comparison toolkit for binary-treatment panel causal inference. Runs difference-in-differences (DID; two-way fixed effects), synthetic difference-in-differences (SDID), synthetic control (SC), matrix completion (MC), and the Triply RObust Panel (TROP) estimator of Athey, Imbens, Qu and Viviano (2026) &lt;doi:10.1002/jae.70061&gt; on the same data, and returns their average treatment effects on the treated (ATT) on a single tidy schema with shared plots. TROP, DID and matrix completion are implemented natively; SDID and SC are obtained through the synthdid package, and an alternative matrix-completion / interactive fixed-effects estimator through gsynth. The suggested packages synthdid and augsynth are not on CRAN; they can be installed from GitHub at &lt;https://github.com/synth-inference/synthdid&gt; and &lt;https://github.com/ebenmichael/augsynth&gt;, and every feature that needs them is skipped with a message when they are absent. This is an unofficial, independent implementation and is not affiliated with or endorsed by the authors of the TROP estimator.">
+<meta property="og:title" content="Triply Robust Panel (TROP) Estimator in R">
+<meta name="description" content="R package for the Triply Robust Panel (TROP) estimator of Athey, Imbens, Qu and Viviano (2026), with DID, synthetic control, SDID and matrix completion on one panel.">
+<meta property="og:description" content="R package for the Triply Robust Panel (TROP) estimator of Athey, Imbens, Qu and Viviano (2026), with DID, synthetic control, SDID and matrix completion on one panel.">
+<meta property="og:image" content="https://takuma1102.github.io/cfcompare/reference/figures/compare_forest.png">
+<meta property="og:image:alt" content="Forest plot comparing ATT estimates from TROP, DID, SC, SDID and MC">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
