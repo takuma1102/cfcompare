@@ -1,7 +1,5 @@
 # cfcompare 0.2.0
 
-* Initial CRAN submission.
-
 ## Alignment with Stata `trop` v0.2.9 and Python `trop` v0.1.11 (October 2026)
 
 Changes since the July 2026 development release on GitHub / R-universe,
